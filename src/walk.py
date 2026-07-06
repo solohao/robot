@@ -85,7 +85,14 @@ def build_step1_path():
 
 
 def build_step2_path(q_start, base_T):
-    """R foot: 0.35 (top) -> side pad at x=-0.65, using numeric IK."""
+    """R foot: 0.35 (top) -> side pad at x=-0.65, using numeric IK.
+
+    Every waypoint is chosen on a collision-free IK branch with respect to
+    the station hull (see plan_step2.solve_clear), and the foot approaches
+    the side pad along its +y normal so the links wrap around the cylinder
+    instead of cutting through it.
+    """
+    from plan_step2 import solve_clear
     wps = [(q_start, 0.0)]
     q = q_start.copy()
     targets = []
@@ -93,26 +100,29 @@ def build_step2_path(q_start, base_T):
     for p, d in [((0.30, 0.0, 0.45), 2.5), ((0.05, 0.0, 0.60), 2.0),
                  ((-0.30, 0.0, 0.60), 2.0)]:
         targets.append((foot_pose_top(np.array(p)), d))
-    # rotate the normal from +z to +y while approaching the side pad
-    T_mid = np.eye(4)
-    ang = np.deg2rad(45)
-    Rx = np.array([[1, 0, 0],
-                   [0, np.cos(-ang), -np.sin(-ang)],
-                   [0, np.sin(-ang), np.cos(-ang)]])
-    T_mid[:3, :3] = Rx @ foot_pose_top(np.zeros(3))[:3, :3]
-    T_mid[:3, 3] = (-0.55, 0.10, 0.45)
-    targets.append((T_mid, 2.0))
-    targets.append((foot_pose_side(PAD_SIDE + np.array([0., 0.06, 0.])), 2.0))
+    # swing to the +y side, already in the side-pad orientation, then
+    # approach the pad along its normal and dock
+    targets.append((foot_pose_side(PAD_SIDE + np.array([0., 0.25, 0.15])), 2.5))
+    targets.append((foot_pose_side(PAD_SIDE + np.array([0., 0.10, 0.])), 2.0))
     targets.append((foot_pose_side(PAD_SIDE), 2.0))
     for T_des, d in targets:
-        q, err = ik_numeric(T_des, q, base=base_T, q_pref=q)
-        if err > 1e-4:
-            raise RuntimeError(f'IK failed (err={err:.2e}) for target\n{T_des}')
+        q = solve_clear(T_des, base_T, q)
+        # select the 2*pi branch of every joint nearest the previous waypoint
+        prev = wps[-1][0]
+        q = prev + np.arctan2(np.sin(q - prev), np.cos(q - prev))
         wps.append((q.copy(), d))
     return QuinticPath(wps)
 
 
 def main():
+    # plan both steps offline before touching the simulator (branch search for
+    # collision-free IK solutions is slow and must not stall the stepped sim)
+    T_r_fixed = L_BASE_WORLD @ fk(np.zeros(7))     # R foot world pose (fixed)
+    path1 = build_step1_path()
+    q1_end, _, _ = path1.sample(path1.total_time)
+    T_lbase_new = T_r_fixed @ np.linalg.inv(fk(q1_end))
+    path2 = build_step2_path(q1_end, T_lbase_new)
+
     client = RemoteAPIClient()
     sim = client.getObject('sim')
 
@@ -159,14 +169,9 @@ def main():
         return t_off + path.total_time
 
     # ---- step 1: L foot -> position 1 -------------------------------------
-    T_r_fixed = L_BASE_WORLD @ fk(np.zeros(7))     # R foot world pose (fixed)
-    path1 = build_step1_path()
     t_end = run_path(path1, moving='L', T_support=T_r_fixed)
 
     # ---- step 2: R foot -> position 2 (side pad) --------------------------
-    q1_end, _, _ = path1.sample(path1.total_time)
-    T_lbase_new = T_r_fixed @ np.linalg.inv(fk(q1_end))
-    path2 = build_step2_path(q1_end, T_lbase_new)
     run_path(path2, moving='R', base_T=T_lbase_new, t_off=t_end)
 
     time.sleep(2.0)

@@ -156,6 +156,11 @@ def main():
         '全程关节速度峰值约 4.4 rad/s、加速度峰值约 5.5 rad/s²，速度与加速度曲线'
         '连续无跳变（图 2），足端在吸合与脱开时刻速度、加速度为零；第 1 步中两足'
         '始终保持在 y = 0 平面内，第 2 步足端法线由 +z 平滑翻转到 +y。',
+        '第 2 步路径考虑了与舱体（半径约 0.134 m 的圆柱）的避碰：每个路径点在'
+        '碰撞检测下选取无碰撞的逆解分支（src/plan_step2.py），足端在舱体上方转入'
+        '侧面落足盘姿态后沿其 +y 法线方向逐步逼近，臂杆自然绕过舱体侧面；对整条'
+        '五次多项式轨迹按 400 个采样点密集校验，各连杆与舱体表面的最小间隙全程'
+        '非负，无穿透。',
     ]
     p = sec4
     for t in res:
@@ -164,12 +169,16 @@ def main():
                       '图 1  初始位形（左：场景总览，两足位于顶部落足盘）')
     p = add_pic_after(p, os.path.join(FIG, 'step1_swing.png'), 12,
                       '图 2  第 1 步摆动过程（左足越过支撑足摆向位置 1）')
+    p = add_pic_after(p, os.path.join(FIG, 'step2_swing.png'), 12,
+                      '图 3  第 2 步摆动过程（右足在舱体上方转入侧面姿态）')
+    p = add_pic_after(p, os.path.join(FIG, 'step2_dock.png'), 12,
+                      '图 4  第 2 步沿侧面落足盘 +y 法线逼近（臂杆绕过舱体，无穿透）')
     p = add_pic_after(p, os.path.join(FIG, 'final_docked.png'), 12,
-                      '图 3  行走完成（左足位于位置 1，右足吸合于侧面位置 2）')
+                      '图 5  行走完成（左足位于位置 1，右足吸合于侧面位置 2）')
     p = add_pic_after(p, os.path.join(FIG, 'joint_curves.png'), 12,
-                      '图 4  关节位置/速度/加速度曲线（虚线为两步分界）')
+                      '图 6  关节位置/速度/加速度曲线')
     p = add_pic_after(p, os.path.join(FIG, 'foot_positions.png'), 12,
-                      '图 5  两足端位置随时间变化曲线')
+                      '图 7  两足端位置随时间变化曲线')
 
     out = os.path.join(HERE, '实验1-机械臂运动控制仿真-实验报告.docx')
     doc.save(out)
