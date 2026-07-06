@@ -16,7 +16,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 FIG = os.path.join(HERE, 'figures')
 
 
-def add_par_after(par, text='', bold=False, size=10.5, align=None):
+def add_par_after(par, text='', bold=False, size=10.5, align=None, indent=False):
     new = copy.deepcopy(par._p)
     par._p.addnext(new)
     from docx.text.paragraph import Paragraph
@@ -28,6 +28,8 @@ def add_par_after(par, text='', bold=False, size=10.5, align=None):
     run.font.size = Pt(size)
     if align is not None:
         np_.alignment = align
+    if indent:
+        np_.paragraph_format.first_line_indent = Cm(0.74)
     return np_
 
 
@@ -57,8 +59,8 @@ def main():
     sec4 = find_par(doc, '四、实验结果说明与分析')
 
     # ---------------- 3.1 DH 参数表 ----------------
-    p = add_par_after(sec31,
-        '机械臂为 7 自由度对称构型（关节轴依次为 Z-Y-X-X-X-Y-Z），两端均为可与'
+    p = add_par_after(sec31, indent=True,
+        text='机械臂为 7 自由度对称构型（关节轴依次为 Z-Y-X-X-X-Y-Z），两端均为可与'
         '基座电磁吸合的末端。以左足（L_Base）落足面为基坐标系{0}（z0 垂直于落足面'
         '向外），沿链路到右足（R_Base）建立各关节坐标系，按标准 D-H 方法（zi 沿'
         '关节 i+1 轴线）测得参数如下（长度单位 mm，角度单位 °）：')
@@ -90,13 +92,13 @@ def main():
     p._p.addnext(tbl._tbl)
 
     # ---------------- 3.2 正运动学 ----------------
-    p = add_par_after(sec32,
-        '每个关节绕自身 z 轴旋转，相邻坐标系之间的变换为常值矩阵 Ai（由零位测量'
+    p = add_par_after(sec32, indent=True,
+        text='每个关节绕自身 z 轴旋转，相邻坐标系之间的变换为常值矩阵 Ai（由零位测量'
         '得到）。正运动学为齐次变换连乘：')
     p = add_par_after(p, 'T(0→7) = A0·Rz(θ1)·A1·Rz(θ2)·A2·Rz(θ3)·A3·Rz(θ4)·A4·Rz(θ5)·A5·Rz(θ6)·A6·Rz(θ7)·A7',
                       align=WD_ALIGN_PARAGRAPH.CENTER)
-    p = add_par_after(p,
-        '其中 Rz(θ) 为绕 z 轴的旋转矩阵，Ai 由 3.1 的 D-H 参数（a、α、d）确定：'
+    p = add_par_after(p, indent=True,
+        text='其中 Rz(θ) 为绕 z 轴的旋转矩阵，Ai 由 3.1 的 D-H 参数（a、α、d）确定：'
         'Ai = Trans(z, d)·Rot(x, α)·Trans(x, a)。程序实现见 src/kinematics.py 的 fk()。'
         '经验证：零位 θ=0 时正运动学给出的右足位姿 (0.35, 0, 0.235) 与仿真场景中'
         'R_Base 的实际位姿完全一致（误差 < 1e-6 m）。')
@@ -112,9 +114,9 @@ def main():
         '距离，h = 2·l·cos t（l = 400 mm 为长臂杆长度）；',
         '(3) 设目标摆动足相对支撑足的偏移为 (D, Δz)（足面法线保持竖直），令'
         ' r² = D² + Δz²，则解析解为：',
-        'h = √(r² − L²)，  t = arccos( h / 2l )',
+        'h² = r² − L² (h ≥ 0)，  t = arccos( h / 2l )',
         'θ2 = atan2(Δz, D) − atan2(h, −L)，  θ6 = −θ2',
-        '可解性条件为 L ≤ r ≤ √(L² + 4l²)，即 0.3 m ≤ r ≤ 0.906 m。第 1 步'
+        '可解性条件为 L² ≤ r² ≤ L² + 4l²，即 0.3 m ≤ r ≤ 0.906 m。第 1 步'
         '（D = 0.6 m）满足该条件。位置 2 位于侧面落足盘（法线沿 +y，需三维姿态'
         '变换），此时在解析解给出的初值附近用基于解析雅可比矩阵的阻尼最小二乘法'
         '迭代求精（src/kinematics.py 的 ik_numeric()），数步内收敛到 1e-6。',
@@ -123,8 +125,9 @@ def main():
     ]
     p = sec33
     for t in texts33:
-        center = t.startswith(('h =', 'θ2 ='))
-        p = add_par_after(p, t, align=WD_ALIGN_PARAGRAPH.CENTER if center else None)
+        center = t.startswith(('h² =', 'θ2 ='))
+        p = add_par_after(p, t, align=WD_ALIGN_PARAGRAPH.CENTER if center else None,
+                          indent=not center and not t.startswith('('))
 
     # ---------------- 3.4 轨迹规划 ----------------
     texts34 = [
@@ -135,16 +138,16 @@ def main():
         '路径点由逆运动学求得：第 1 步（左足 0.65 m → 位置 1（−0.25 m 顶部落足'
         '盘），以右足为支撑）共 7 个路径点（含自运动过渡、抬升、越过支撑足、下落'
         '吸合），历时 14 s；第 2 步（右足 0.35 m → 位置 2（−0.65 m 侧面落足盘，'
-        '法线沿 +y），以左足为支撑）共 7 个路径点（抬升、沿舱体上方平移、绕 x 轴'
-        '翻转姿态、贴近并吸合），历时 12.5 s。实现见 src/trajectory.py 与'
-        ' src/walk.py。',
+        '法线沿 +y），以左足为支撑）共 7 个路径点（抬升、沿舱体上方平移、在舱体'
+        '上方转入侧面姿态、沿侧面落足盘 +y 法线逐段逼近并吸合），历时 13 s。'
+        '实现见 src/trajectory.py 与 src/walk.py。',
         '行走通过“基座交换”实现：第 1 步中右足固定，运动学树根（L_Base）按'
         ' T_L = T_R(fixed)·T(0→7)(q)⁻¹ 浮动更新；第 2 步左足（树根）固定，直接'
         '驱动关节。',
     ]
     p = sec34
     for t in texts34:
-        p = add_par_after(p, t)
+        p = add_par_after(p, t, indent=True)
 
     # ---------------- 四、实验结果 ----------------
     res = [
@@ -164,7 +167,7 @@ def main():
     ]
     p = sec4
     for t in res:
-        p = add_par_after(p, t)
+        p = add_par_after(p, t, indent=True)
     p = add_pic_after(p, os.path.join(FIG, 'initial_pose.png'), 12,
                       '图 1  初始位形（左：场景总览，两足位于顶部落足盘）')
     p = add_pic_after(p, os.path.join(FIG, 'step1_swing.png'), 12,
