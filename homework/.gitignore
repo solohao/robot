@@ -1,0 +1,10 @@
+# LaTeX build artifacts
+*.aux
+*.log
+*.out
+*.toc
+*.synctex.gz
+# intermediate PDFs for figures / documents (docx is the deliverable)
+figs_src/*.pdf
+figs_src/_test.*
+week*.pdf
