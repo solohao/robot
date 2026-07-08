@@ -1,0 +1,44 @@
+\documentclass[border=6pt]{standalone}
+\usepackage{tikz}
+\usepackage{amsmath}
+\usepackage{xeCJK}
+\setCJKmainfont{Noto Sans CJK SC}
+\usetikzlibrary{arrows.meta}
+\begin{document}
+\begin{tikzpicture}[x=0.55cm, y=1cm, font=\small]
+  % time axis parameters
+  \def\H{0.6}   % waveform high level offset
+  % helper: draw a signal row given name at y0 and list of high intervals
+  % We'll draw manually.
+
+  % ----- grid / time marks -----
+  \foreach \t in {0,3,6,9,12,15,18,21} {
+    \draw[gray!40] (\t,-0.4) -- (\t,4.9);
+    \node[below,gray!70] at (\t,-0.4) {\scriptsize \t};
+  }
+  \node[below] at (10.5,-0.9) {时间 $t$ / s};
+
+  % phase labels
+  \node[align=center] at (3,5.3)  {\scriptsize 步1};
+  \node[align=center] at (9,5.3)  {\scriptsize 步2};
+  \node[align=center] at (15,5.3) {\scriptsize 步3};
+  \node[align=center] at (19.5,5.3){\scriptsize 步4};
+  \node[align=center] at (10.5,5.9){\small 一个循环周期 $= 6+6+6+3 = 21\,\mathrm{s}$};
+
+  % ---- P1 (Q4.0): high 0-6 and 12-18 ----
+  \node[left] at (0,4) {P1 (Q4.0)};
+  \draw[very thick, blue] (0,4)--(0,4.6)--(6,4.6)--(6,4)--(12,4)--(12,4.6)--(18,4.6)--(18,4)--(21,4);
+  % ---- P2 (Q4.1): high 6-12 and 12-18 ----
+  \node[left] at (0,3) {P2 (Q4.1)};
+  \draw[very thick, blue] (0,3)--(6,3)--(6,3.6)--(18,3.6)--(18,3)--(21,3);
+  % ---- A group (Q5.0~Q5.6): high 0-6 and 12-18 ----
+  \node[left] at (0,2) {A组 (Q5.0$\sim$Q5.6)};
+  \draw[very thick, red] (0,2)--(0,2.6)--(6,2.6)--(6,2)--(12,2)--(12,2.6)--(18,2.6)--(18,2)--(21,2);
+  % ---- B group (Q6.0~Q6.6): high 6-18 ----
+  \node[left] at (0,1) {B组 (Q6.0$\sim$Q6.6)};
+  \draw[very thick, red] (0,1)--(6,1)--(6,1.6)--(18,1.6)--(18,1)--(21,1);
+
+  % baseline arrow
+  \draw[-{Latex}] (0,-0.4) -- (21.8,-0.4);
+\end{tikzpicture}
+\end{document}

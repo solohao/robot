@@ -1,0 +1,51 @@
+\documentclass[border=6pt]{standalone}
+\usepackage{tikz}
+\usepackage{amsmath}
+\usepackage{xeCJK}
+\setCJKmainfont{Noto Sans CJK SC}
+\usetikzlibrary{arrows.meta,positioning,calc}
+\begin{document}
+\begin{tikzpicture}[
+  font=\small,
+  step/.style={draw,very thick,minimum width=3.6cm,minimum height=1.0cm,align=center},
+  init/.style={draw,double,very thick,minimum width=3.6cm,minimum height=1.0cm,align=center},
+  act/.style={draw,minimum width=3.4cm,minimum height=1.0cm,align=left,font=\footnotesize},
+  every node/.style={},
+  ]
+  % steps on the left column
+  \node[init] (s0) at (0,10) {S0\quad 初始步（停机）};
+  \node[step] (s1) at (0,7.6) {S1\quad 步1};
+  \node[step] (s2) at (0,5.2) {S2\quad 步2};
+  \node[step] (s3) at (0,2.8) {S3\quad 步3};
+  \node[step] (s4) at (0,0.4) {S4\quad 步4（暂停）};
+
+  % action boxes on the right of each step
+  \node[act,right=1.4cm of s1] (a1) {P1(Q4.0)=1\\ A组(Q5.0$\sim$Q5.6)=1};
+  \node[act,right=1.4cm of s2] (a2) {P2(Q4.1)=1\\ B组(Q6.0$\sim$Q6.6)=1};
+  \node[act,right=1.4cm of s3] (a3) {P1,P2=1\\ A组,B组=1};
+  \node[act,right=1.4cm of s4] (a4) {全部输出=0};
+  \draw (s1.east)--(a1.west);
+  \draw (s2.east)--(a2.west);
+  \draw (s3.east)--(a3.west);
+  \draw (s4.east)--(a4.west);
+
+  % transitions (horizontal bars) between steps
+  \foreach \A/\B/\lbl in {s0/s1/{SB1（I0.0）},s1/s2/{T1: 6\,s 到},s2/s3/{T2: 6\,s 到},s3/s4/{T3: 6\,s 到}} {
+    \draw[very thick] (\A) -- (\B);
+    \coordinate (m) at ($(\A)!0.5!(\B)$);
+    \draw[very thick] ($(m)+(-0.5,0)$) -- ($(m)+(0.5,0)$);
+    \node[right] at ($(m)+(0.55,0)$) {\footnotesize \lbl};
+  }
+
+  % loop from S4 back to S1: transition T4 3s
+  \draw[very thick] (s4.west) -- ++(-2.4,0) coordinate(l4);
+  \draw[very thick] (l4) -- (l4|-s1.west) coordinate(l1);
+  \draw[very thick,-{Latex}] (l1) -- (s1.west);
+  \draw[very thick] ($(l4)!0.5!(l1)+(-0.5,0)$) -- ($(l4)!0.5!(l1)+(0.5,0)$);
+  \node[left,align=right] at ($(l4)!0.5!(l1)+(-0.55,0)$) {\footnotesize T4: 3\,s 到\\（循环）};
+
+  % stop transition: any step -> S0 when SB2, shown as note
+  \node[draw,dashed,align=left,font=\footnotesize] at (7.2,0.4)
+    {停止：按下 SB2(I0.1) 时\\ 复位运行标志与全部步，\\ 返回初始步 S0（全部停喷）。};
+\end{tikzpicture}
+\end{document}
