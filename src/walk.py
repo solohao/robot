@@ -19,7 +19,7 @@ import time
 import numpy as np
 from coppeliasim_zmqremoteapi_client import RemoteAPIClient
 
-from kinematics import JOINT_NAMES, L_BASE_WORLD, fk
+from kinematics import JOINT_NAMES, L_BASE_WORLD, fk, ik_planar_arch
 from plan_step2 import MIN_LINK_CLEARANCE, solve_clear, solve_near, verify_path
 from trajectory import QuinticPath
 
@@ -88,21 +88,41 @@ def build_step1_path():
     fixed_tip = L_BASE_WORLD @ fk(np.zeros(7))
     q0 = np.zeros(7)
     q = np.array([0., 0., np.pi / 2, 0., np.pi / 2, 0., 0.])
-    wps = [(q0, 0.0), (q.copy(), 3.0)]
-    targets = [
-        ((0.62, 0.18, 0.400), 1.5),
-        ((0.45, 0.28, 0.500), 2.0),
-        ((0.10, 0.34, 0.550), 2.0),
-        ((-0.05, 0.32, 0.500), 1.5),
-        ((-0.18, 0.20, 0.380), 1.5),
-        (tuple(PAD_TOP_3), 2.5),
+    wps = [(q0, 0.0), (q.copy(), 2.5)]
+    outward_targets = [
+        (0.62, 0.18, 0.400),
+        (0.45, 0.28, 0.500),
+        (0.10, 0.34, 0.550),
     ]
-    for seed, (position, duration) in enumerate(targets):
+    for seed, position in enumerate(outward_targets):
         base_des = l_foot_pose_top(np.asarray(position))
         q = solve_clear(
             fixed_tip, base_des, q, margin=MIN_LINK_CLEARANCE + 0.002,
             seeds=10, seed=seed)
-        wps.append((q.copy(), duration))
+        wps.append((q.copy(), 1.5))
+
+    q_goal = ik_planar_arch(PAD_TOP_2[0] - PAD_TOP_3[0], 0.0)
+    q_goal[1] += 2 * np.pi
+    q_goal[5] -= 2 * np.pi
+    q = q_goal.copy()
+    return_targets = [
+        (-0.18, 0.20, 0.380),
+        (-0.05, 0.32, 0.500),
+        (0.10, 0.34, 0.550),
+    ]
+    return_qs = []
+    for seed, position in enumerate(return_targets, start=50):
+        base_des = l_foot_pose_top(np.asarray(position))
+        q = solve_clear(
+            fixed_tip, base_des, q, margin=MIN_LINK_CLEARANCE + 0.002,
+            seeds=20, seed=seed)
+        return_qs.append(q.copy())
+    wps.extend([
+        (return_qs[2], 2.5),
+        (return_qs[1], 1.5),
+        (return_qs[0], 1.5),
+        (q_goal, 1.5),
+    ])
     path = QuinticPath(wps)
     worst, _ = verify_path(
         path, n=600,
