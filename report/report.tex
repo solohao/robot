@@ -97,6 +97,8 @@ CoppeliaSim + Python（ZeroMQ Remote API）。
     \theta_2 &= \operatorname{atan2}(\Delta z,\,D)-\operatorname{atan2}(h,\,-L), & \theta_6 &= -\theta_2.
   \end{align}
 \end{enumerate}
+该平面问题存在两个解析解：$t=\arccos(h/2l)\ge 0$ 对应``肘上''支，取 $t\to-t$（相应 $\theta_4=\pi-2t$、$\theta_5=\pi-t$ 随之改变）得到``肘下''支，两支到达完全相同的足端位姿。程序取其中一支，并在相邻路径点之间选择与上一点连续的 $2\pi$ 分支以避免关节跳变。
+
 可解性条件为 $L\le r\le\sqrt{L^2+4l^2}$，即 $0.3~\text{m}\le r\le 0.906~\text{m}$；第 1 步（$D=0.6$~m）满足该条件。位置 2 位于侧面落足盘（法线沿 $+y$，需三维姿态变换），此时在解析解给出的初值附近用基于解析雅可比矩阵的阻尼最小二乘法迭代求精（\texttt{src/kinematics.py} 的 \texttt{ik\_numeric()}），数步内收敛到 $10^{-6}$。
 
 此外，$\theta_3=\theta_5=s$、$\theta_4=0$（$\theta_1=\theta_2=\theta_6=\theta_7=0$）为保持两足位姿不变的自运动族，用于起步前从零位平滑过渡到拱形位形族（$s\colon 0\to\pi/2$）。
@@ -167,5 +169,27 @@ CoppeliaSim + Python（ZeroMQ Remote API）。
   \caption{两足端位置随时间变化曲线}
   \label{fig:feet}
 \end{figure}
+
+\subsection{运动学与轨迹的仿真验证}
+为验证正/逆运动学模型的正确性，将若干组关节角逐一通过 ZeroMQ Remote API 设入 CoppeliaSim，读取仿真界面中 \texttt{R\_Base} 的世界位姿，与链式正运动学 $T=T_{\text{L\_Base}}\cdot{}^{0}T_{7}(q)$ 的预测值逐组比对，结果如表~\ref{tab:verify}。三组任意位形（含零位与两组随机角）以及逆运动学的``肘上/肘下''两解，末端位置误差均为 $0$（数值层面 $\sim10^{-13}$~m），且两个逆解到达完全相同的目标位姿 $(1.25,\,0,\,0.385)$，印证了解析解的双分支性质。
+
+\begin{table}[htbp]
+  \centering
+  \caption{关节角设入仿真后 \texttt{R\_Base} 世界位姿：仿真界面读数 vs 链式正运动学}
+  \label{tab:verify}
+  \begin{tabular}{lccc}
+    \toprule
+    配置 & 仿真界面 $(x,y,z)$/m & 链式 FK $(x,y,z)$/m & 位置误差\\
+    \midrule
+    零位 $q=0$        & $(0.350,\,0,\,0.235)$      & $(0.350,\,0,\,0.235)$      & $0$\\
+    任意位形 A        & $(0.590,\,-0.441,\,0.566)$ & $(0.590,\,-0.441,\,0.566)$ & $0$\\
+    任意位形 B        & $(0.529,\,-0.585,\,0.061)$ & $(0.529,\,-0.585,\,0.061)$ & $0$\\
+    IK 解（肘上）     & $(1.250,\,0,\,0.385)$      & $(1.250,\,0,\,0.385)$      & $0$\\
+    IK 解（肘下）     & $(1.250,\,0,\,0.385)$      & $(1.250,\,0,\,0.385)$      & $0$\\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+对轨迹的连续性亦作数值核验：在每个路径点采样分段五次多项式，关节速度与加速度均为 $0$，相邻采样点间无跳变，解析导数与位置的数值微分一致，确认整条轨迹的位置、速度、加速度全程连续。
 
 \end{document}
