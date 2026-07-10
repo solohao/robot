@@ -6,7 +6,7 @@
 ## 目录结构
 
 - `scenes/SpaceRobot.ttt` — CoppeliaSim 仿真场景
-- `src/kinematics.py` — DH 正运动学、雅可比、逆运动学（矢状面解析解 + 阻尼最小二乘）
+- `src/kinematics.py` — 链式(chain)正运动学、几何雅可比、逆运动学（矢状面对称拱形解析解 + 阻尼最小二乘数值解）
 - `src/trajectory.py` — 分段五次多项式轨迹规划（速度、加速度连续）
 - `src/walk.py` — 行走主程序（步 1：左足 → 位置 1 顶部落足盘；步 2：右足 → 位置 2 侧面落足盘）
 - `src/chain_constants.py` — 从场景零位测得的链路常值变换
