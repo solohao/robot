@@ -7,9 +7,8 @@ The arm walks two steps on the space station:
           normal points along +y (position 2).
 
 All trajectories are piecewise-quintic in joint space, so joint position,
-velocity and acceleration are continuous.  Waypoint configurations come from
-the analytic sagittal-plane IK (step 1) and from damped-least-squares IK
-(step 2, general 3D pose).
+velocity and acceleration are continuous. Waypoint configurations come from
+damped-least-squares IK with checked station-hull clearance.
 
 Run CoppeliaSim with SpaceRobot.ttt loaded, then:  python3 walk.py
 """
@@ -20,8 +19,8 @@ import time
 import numpy as np
 from coppeliasim_zmqremoteapi_client import RemoteAPIClient
 
-from kinematics import JOINT_NAMES, L_BASE_WORLD, fk, ik_planar_arch
-from plan_step2 import MIN_LINK_CLEARANCE, solve_near, verify_path
+from kinematics import JOINT_NAMES, L_BASE_WORLD, fk
+from plan_step2 import MIN_LINK_CLEARANCE, solve_clear, solve_near, verify_path
 from trajectory import QuinticPath
 
 OUT_DIR = os.path.join(os.path.dirname(__file__), '..', 'report', 'figures')
@@ -33,8 +32,15 @@ PAD_TOP_3 = np.array([-0.25, 0.0, 0.235])   # position 1 (top)
 PAD_SIDE = np.array([-0.65, 0.1325, 0.101])  # position 2 (side, normal +y)
 
 
+def l_foot_pose_top(p):
+    """World pose of the L foot standing on a top pad."""
+    T = L_BASE_WORLD.copy()
+    T[:3, 3] = p
+    return T
+
+
 def foot_pose_top(p):
-    """World pose of a foot standing on a top pad at position p (normal +z)."""
+    """World pose of the R foot standing on a top pad."""
     T = np.eye(4)
     T[:3, :3] = np.array([[0., 1., 0.],
                           [0., 0., -1.],
@@ -77,35 +83,33 @@ def blended_pose(T_start, T_end, position, u):
     return T
 
 
-def solve_planar(x_foot, z_foot, x_support=PAD_TOP_2[0], z_support=0.235):
-    """Analytic IK waypoint for step 1 (L foot at (x_foot, z_foot), R fixed)."""
-    D = x_support - x_foot
-    dz = z_support - z_foot
-    return ik_planar_arch(D, dz)
-
-
 def build_step1_path():
-    """L foot: 0.65 -> -0.25 (top pad), pivoting on the R foot."""
-    wps = []
+    """Move the L foot to the next top pad on a hull-clear lateral arc."""
+    fixed_tip = L_BASE_WORLD @ fk(np.zeros(7))
     q0 = np.zeros(7)
-    wps.append((q0, 0.0))
-    # self-motion: reconfigure into the arch family without moving the feet
-    s = np.pi / 2
-    wps.append((np.array([0., 0., s, 0., s, 0., 0.]), 3.0))
-    # swing waypoints of the L foot (x, z, duration)
-    prev = wps[-1][0]
-    for x, z, d in [(0.62, 0.45, 2.5), (0.35, 0.55, 2.0), (0.05, 0.55, 2.0),
-                    (-0.15, 0.40, 2.0), (-0.25, 0.235, 2.5)]:
-        q = solve_planar(x, z)
-        # keep q2/q6 continuous with the previous waypoint (branch selection)
-        for i in (1, 5):
-            while q[i] - prev[i] > np.pi:
-                q[i] -= 2 * np.pi
-            while q[i] - prev[i] < -np.pi:
-                q[i] += 2 * np.pi
-        wps.append((q, d))
-        prev = q
-    return QuinticPath(wps)
+    q = np.array([0., 0., np.pi / 2, 0., np.pi / 2, 0., 0.])
+    wps = [(q0, 0.0), (q.copy(), 3.0)]
+    targets = [
+        ((0.62, 0.18, 0.400), 1.5),
+        ((0.45, 0.28, 0.500), 2.0),
+        ((0.10, 0.34, 0.550), 2.0),
+        ((-0.05, 0.32, 0.500), 1.5),
+        ((-0.18, 0.20, 0.380), 1.5),
+        (tuple(PAD_TOP_3), 2.5),
+    ]
+    for seed, (position, duration) in enumerate(targets):
+        base_des = l_foot_pose_top(np.asarray(position))
+        q = solve_clear(
+            fixed_tip, base_des, q, margin=MIN_LINK_CLEARANCE + 0.002,
+            seeds=10, seed=seed)
+        wps.append((q.copy(), duration))
+    path = QuinticPath(wps)
+    worst, _ = verify_path(
+        path, n=600,
+        base_fn=lambda q_now: fixed_tip @ np.linalg.inv(fk(q_now)))
+    if worst <= MIN_LINK_CLEARANCE:
+        raise RuntimeError(f'step 1 path clearance too small: {worst:.4f} m')
+    return path
 
 
 def build_step2_path(q_start, base_T):
@@ -150,14 +154,14 @@ def build_reset_path(q_start, fixed_tip):
         ((-0.65, 0.45, -0.060), 0.70, 2.5),
         ((-0.65, 0.30, -0.180), 0.88, 2.5),
     ]
-    for position, blend, duration in targets:
+    for seed, (position, blend, duration) in enumerate(targets):
         base_des = blended_pose(
             base_start, base_goal, np.asarray(position), blend)
-        q = solve_near(fixed_tip, base_des, q)
+        q = solve_clear(
+            fixed_tip, base_des, q, margin=MIN_LINK_CLEARANCE + 0.002,
+            seeds=20, seed=200 + seed)
         wps.append((q.copy(), duration))
-    self_motion = np.array([0., 0., 1.8, 0., 1.8, 0., 0.])
-    wps.append((self_motion, 3.0))
-    wps.append((np.zeros(7), 4.0))
+    wps.append((np.zeros(7), 7.0))
     path = QuinticPath(wps)
     worst, _ = verify_path(
         path, n=700,

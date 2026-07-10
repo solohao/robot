@@ -24,6 +24,16 @@ cd src && python3 walk.py
 
 运行结束后关节曲线数据保存在 `report/figures/walk_log.npz`。
 
+## 验证轨迹
+
+```bash
+PYTHONPATH=src python3 -m unittest discover -s tests -v
+# CoppeliaSim 已打开 SpaceRobot.ttt 且仿真停止时：
+PYTHONPATH=src python3 tests/check_coppelia_collisions.py
+```
+
+第二条命令使用场景中的实际碰撞几何，逐帧检查六个机械臂连杆与空间站之间是否碰撞。
+
 ## 重新生成实验报告
 
 ```bash

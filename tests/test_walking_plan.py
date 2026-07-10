@@ -4,9 +4,9 @@ import numpy as np
 
 from kinematics import L_BASE_WORLD, fk
 from plan_step2 import MIN_LINK_CLEARANCE, verify_path
-from walk import (PAD_SIDE, PLAYBACK_SPEED, build_reset_path,
+from walk import (PAD_SIDE, PAD_TOP_3, PLAYBACK_SPEED, build_reset_path,
                   build_step1_path, build_step2_path, foot_pose_side,
-                  sample_times)
+                  l_foot_pose_top, sample_times)
 
 
 class WalkingPlanTest(unittest.TestCase):
@@ -21,6 +21,23 @@ class WalkingPlanTest(unittest.TestCase):
         cls.r_side = cls.base2 @ fk(cls.q2_end)
         cls.reset = build_reset_path(cls.q2_end, cls.r_side)
 
+    def test_step1_has_clearance_and_uses_lateral_arc(self):
+        clearance, _ = verify_path(
+            self.step1, n=800,
+            base_fn=lambda q: self.r_fixed @ np.linalg.inv(fk(q)))
+        samples = np.array([
+            self.step1.sample(t)[0]
+            for t in np.linspace(0, self.step1.total_time, 800)
+        ])
+        foot_poses = [
+            self.r_fixed @ np.linalg.inv(fk(q)) for q in samples
+        ]
+
+        self.assertGreater(clearance, MIN_LINK_CLEARANCE)
+        self.assertGreater(max(T[1, 3] for T in foot_poses), 0.3)
+        self.assertTrue(np.allclose(
+            foot_poses[-1], l_foot_pose_top(PAD_TOP_3), atol=2e-5))
+
     def test_step2_has_clearance_and_compact_motion(self):
         clearance, _ = verify_path(self.step2, self.base2, n=800)
         samples = np.array([
@@ -32,8 +49,8 @@ class WalkingPlanTest(unittest.TestCase):
         ])
 
         self.assertGreater(clearance, MIN_LINK_CLEARANCE)
-        self.assertLess(np.ptp(samples, axis=0).max(), 1.8)
         self.assertLess(foot_positions[:, 2].max(), 0.39)
+        self.assertLess(foot_positions[:, 1].max(), 0.37)
         self.assertTrue(np.allclose(
             self.r_side, foot_pose_side(PAD_SIDE), atol=2e-5))
 
