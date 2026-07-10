@@ -20,11 +20,12 @@ import time
 import numpy as np
 from coppeliasim_zmqremoteapi_client import RemoteAPIClient
 
-from kinematics import (JOINT_NAMES, L_BASE_WORLD, fk, ik_numeric,
-                        ik_planar_arch)
+from kinematics import JOINT_NAMES, L_BASE_WORLD, fk, ik_planar_arch
+from plan_step2 import MIN_LINK_CLEARANCE, solve_near, verify_path
 from trajectory import QuinticPath
 
 OUT_DIR = os.path.join(os.path.dirname(__file__), '..', 'report', 'figures')
+PLAYBACK_SPEED = 0.5
 
 PAD_TOP_1 = np.array([0.65, 0.0, 0.235])    # initial L foot
 PAD_TOP_2 = np.array([0.35, 0.0, 0.235])    # initial R foot (pivot of step 1)
@@ -50,6 +51,29 @@ def foot_pose_side(p):
                           [-1., 0., 0.],
                           [0., -1., 0.]])
     T[:3, 3] = p
+    return T
+
+
+def interpolate_rotation(R_start, R_end, u):
+    """Spherical interpolation between two rotation matrices."""
+    R = R_end @ R_start.T
+    angle = np.arccos(np.clip((np.trace(R) - 1) / 2, -1, 1))
+    if angle < 1e-9:
+        return R_start.copy()
+    axis = np.array([R[2, 1] - R[1, 2],
+                     R[0, 2] - R[2, 0],
+                     R[1, 0] - R[0, 1]]) / (2 * np.sin(angle))
+    x, y, z = axis
+    K = np.array([[0., -z, y], [z, 0., -x], [-y, x, 0.]])
+    Ru = (np.eye(3) + np.sin(angle * u) * K
+          + (1 - np.cos(angle * u)) * (K @ K))
+    return Ru @ R_start
+
+
+def blended_pose(T_start, T_end, position, u):
+    T = np.eye(4)
+    T[:3, :3] = interpolate_rotation(T_start[:3, :3], T_end[:3, :3], u)
+    T[:3, 3] = position
     return T
 
 
@@ -85,69 +109,97 @@ def build_step1_path():
 
 
 def build_step2_path(q_start, base_T):
-    """R foot: 0.35 (top) -> side pad at x=-0.65, using numeric IK.
-
-    Every waypoint is chosen on a collision-free IK branch with respect to
-    the station hull (see plan_step2.solve_clear), and the foot approaches
-    the side pad along its +y normal so the links wrap around the cylinder
-    instead of cutting through it.
-    """
-    from plan_step2 import solve_clear
+    """Move the R foot to the side pad with a compact, checked Cartesian arc."""
     wps = [(q_start, 0.0)]
     q = q_start.copy()
-    targets = []
-    # lift and travel above the station, normal still up
-    for p, d in [((0.30, 0.0, 0.45), 2.5), ((0.05, 0.0, 0.60), 2.0),
-                 ((-0.30, 0.0, 0.60), 2.0)]:
-        targets.append((foot_pose_top(np.array(p)), d))
-    # swing to the +y side, already in the side-pad orientation, then
-    # approach the pad along its normal and dock
-    targets.append((foot_pose_side(PAD_SIDE + np.array([0., 0.25, 0.15])), 2.5))
-    targets.append((foot_pose_side(PAD_SIDE + np.array([0., 0.10, 0.])), 2.0))
-    targets.append((foot_pose_side(PAD_SIDE), 2.0))
-    for T_des, d in targets:
-        q = solve_clear(T_des, base_T, q)
-        # select the 2*pi branch of every joint nearest the previous waypoint
-        prev = wps[-1][0]
-        q = prev + np.arctan2(np.sin(q - prev), np.cos(q - prev))
-        wps.append((q.copy(), d))
-    return QuinticPath(wps)
+    top = foot_pose_top(np.zeros(3))
+    side = foot_pose_side(np.zeros(3))
+    targets = [
+        ((0.35, 0.00, 0.340), 0.00, 2.0),
+        ((0.15, 0.15, 0.380), 0.10, 2.0),
+        ((-0.05, 0.28, 0.360), 0.25, 2.0),
+        ((-0.30, 0.35, 0.300), 0.45, 2.0),
+        ((-0.52, 0.34, 0.230), 0.65, 2.0),
+        ((-0.65, 0.30, 0.160), 0.85, 2.0),
+        ((-0.65, 0.28, 0.101), 1.00, 1.5),
+        ((-0.65, 0.21, 0.101), 1.00, 1.5),
+        (tuple(PAD_SIDE), 1.00, 1.5),
+    ]
+    for position, blend, duration in targets:
+        T_des = blended_pose(top, side, np.asarray(position), blend)
+        q = solve_near(T_des, base_T, q)
+        wps.append((q.copy(), duration))
+    path = QuinticPath(wps)
+    worst, _ = verify_path(path, base_T, n=600)
+    if worst <= MIN_LINK_CLEARANCE:
+        raise RuntimeError(f'step 2 path clearance too small: {worst:.4f} m')
+    return path
+
+
+def build_reset_path(q_start, fixed_tip):
+    """Keep the R foot fixed and return all joint angles to the initial pose."""
+    base_start = fixed_tip @ np.linalg.inv(fk(q_start))
+    base_goal = fixed_tip @ np.linalg.inv(fk(np.zeros(7)))
+    q = q_start.copy()
+    wps = [(q.copy(), 0.0)]
+    targets = [
+        ((-0.25, 0.00, 0.320), 0.00, 2.0),
+        ((-0.32, 0.18, 0.360), 0.12, 2.0),
+        ((-0.45, 0.32, 0.280), 0.30, 2.0),
+        ((-0.58, 0.48, 0.160), 0.50, 2.5),
+        ((-0.65, 0.45, -0.060), 0.70, 2.5),
+        ((-0.65, 0.30, -0.180), 0.88, 2.5),
+    ]
+    for position, blend, duration in targets:
+        base_des = blended_pose(
+            base_start, base_goal, np.asarray(position), blend)
+        q = solve_near(fixed_tip, base_des, q)
+        wps.append((q.copy(), duration))
+    self_motion = np.array([0., 0., 1.8, 0., 1.8, 0., 0.])
+    wps.append((self_motion, 3.0))
+    wps.append((np.zeros(7), 4.0))
+    path = QuinticPath(wps)
+    worst, _ = verify_path(
+        path, n=700,
+        base_fn=lambda q_now: fixed_tip @ np.linalg.inv(fk(q_now)))
+    if worst <= MIN_LINK_CLEARANCE:
+        raise RuntimeError(f'reset path clearance too small: {worst:.4f} m')
+    return path
+
+
+def sample_times(path, dt, skip_first=False):
+    n = int(np.ceil(path.total_time / dt))
+    start = 1 if skip_first else 0
+    return [min(k * dt, path.total_time) for k in range(start, n + 1)]
 
 
 def main():
-    # plan both steps offline before touching the simulator (branch search for
-    # collision-free IK solutions is slow and must not stall the stepped sim)
+    # Plan all motions before starting the stepped simulation.
     T_r_fixed = L_BASE_WORLD @ fk(np.zeros(7))     # R foot world pose (fixed)
     path1 = build_step1_path()
     q1_end, _, _ = path1.sample(path1.total_time)
     T_lbase_new = T_r_fixed @ np.linalg.inv(fk(q1_end))
     path2 = build_step2_path(q1_end, T_lbase_new)
+    q2_end, _, _ = path2.sample(path2.total_time)
+    T_r_side = T_lbase_new @ fk(q2_end)
+    reset_path = build_reset_path(q2_end, T_r_side)
 
     client = RemoteAPIClient()
     sim = client.getObject('sim')
 
-    joints = [sim.getObject('/' + n) if n == 'Joint4' else sim.getObject('/' + n)
-              for n in JOINT_NAMES]
+    joints = [sim.getObject('/' + name) for name in JOINT_NAMES]
     l_base = sim.getObject('/L_Base')
 
     default_fps = sim.getInt32Param(sim.intparam_idle_fps)
-    sim.setInt32Param(sim.intparam_idle_fps, 0)
-    client.setStepping(True)
-    sim.startSimulation()
-
-    dt = sim.getSimulationTimeStep()
     log = {'t': [], 'q': [], 'qd': [], 'qdd': [], 'l_foot': [], 'r_foot': []}
 
     def set_pose(T, handle):
-        sim.setObjectPosition(handle, -1, T[:3, 3].tolist())
-        m = np.zeros(12)
-        m[0:12] = np.concatenate([T[0, :4], T[1, :4], T[2, :4]])
+        m = np.concatenate([T[0, :4], T[1, :4], T[2, :4]])
         sim.setObjectMatrix(handle, -1, m.tolist())
 
-    def run_path(path, moving='L', T_support=None, base_T=None, t_off=0.0):
-        n = int(np.ceil(path.total_time / dt))
-        for k in range(n + 1):
-            t = min(k * dt, path.total_time)
+    def run_path(path, moving='L', T_support=None, base_T=None, t_off=0.0,
+                 skip_first=False):
+        for t in sample_times(path, dt, skip_first):
             q, qd, qdd = path.sample(t)
             if moving == 'L':
                 # R foot fixed: root of the kinematic tree (L_Base) floats
@@ -165,18 +217,26 @@ def main():
             log['l_foot'].append(base_now[:3, 3].copy())
             log['r_foot'].append((base_now @ fk(q))[:3, 3].copy())
             client.step()
-            time.sleep(dt * 0.8)  # keep the visualization close to real time
+            time.sleep(dt / PLAYBACK_SPEED)
         return t_off + path.total_time
 
-    # ---- step 1: L foot -> position 1 -------------------------------------
-    t_end = run_path(path1, moving='L', T_support=T_r_fixed)
-
-    # ---- step 2: R foot -> position 2 (side pad) --------------------------
-    run_path(path2, moving='R', base_T=T_lbase_new, t_off=t_end)
-
-    time.sleep(2.0)
-    sim.stopSimulation()
-    sim.setInt32Param(sim.intparam_idle_fps, default_fps)
+    sim.setInt32Param(sim.intparam_idle_fps, 0)
+    client.setStepping(True)
+    started = False
+    try:
+        sim.startSimulation()
+        started = True
+        dt = sim.getSimulationTimeStep()
+        t_end = run_path(path1, moving='L', T_support=T_r_fixed)
+        t_end = run_path(path2, moving='R', base_T=T_lbase_new, t_off=t_end,
+                         skip_first=True)
+        run_path(reset_path, moving='L', T_support=T_r_side, t_off=t_end,
+                 skip_first=True)
+        time.sleep(2.0)
+    finally:
+        if started:
+            sim.stopSimulation()
+        sim.setInt32Param(sim.intparam_idle_fps, default_fps)
 
     os.makedirs(OUT_DIR, exist_ok=True)
     np.savez(os.path.join(OUT_DIR, 'walk_log.npz'),
