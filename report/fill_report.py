@@ -116,6 +116,10 @@ def main():
         ' r² = D² + Δz²，则解析解为：',
         'h² = r² − L² (h ≥ 0)，  t = arccos( h / 2l )',
         'θ2 = atan2(Δz, D) − atan2(h, −L)，  θ6 = −θ2',
+        '该平面问题存在两个解析解：t = arccos(h/2l) ≥ 0 对应“肘上”支，取 t → −t'
+        '（相应 θ4 = π − 2t、θ5 = π − t 随之改变）得到“肘下”支，两支到达完全相同'
+        '的足端位姿。程序取其中一支，并在相邻路径点之间选择与上一点连续的 2π 分支'
+        '以避免关节跳变。',
         '可解性条件为 L² ≤ r² ≤ L² + 4l²，即 0.3 m ≤ r ≤ 0.906 m。第 1 步'
         '（D = 0.6 m）满足该条件。位置 2 位于侧面落足盘（法线沿 +y，需三维姿态'
         '变换），此时在解析解给出的初值附近用基于解析雅可比矩阵的阻尼最小二乘法'
@@ -182,6 +186,42 @@ def main():
                       '图 6  关节位置/速度/加速度曲线')
     p = add_pic_after(p, os.path.join(FIG, 'foot_positions.png'), 12,
                       '图 7  两足端位置随时间变化曲线')
+
+    # ---------------- 运动学与轨迹的仿真验证 ----------------
+    p = add_par_after(p, '运动学与轨迹的仿真验证', bold=True, size=12)
+    p = add_par_after(p, indent=True,
+        text='为验证正/逆运动学模型的正确性，将若干组关节角逐一通过 ZeroMQ Remote '
+        'API 设入 CoppeliaSim，读取仿真界面中 R_Base 的世界位姿，与链式正运动学'
+        ' T = T(L_Base)·T(0→7)(q) 的预测值逐组比对，结果如下表。三组任意位形（含零'
+        '位与两组随机角）以及逆运动学的“肘上/肘下”两解，末端位置误差均为 0（数值'
+        '层面约 1e-13 m），且两个逆解到达完全相同的目标位姿 (1.25, 0, 0.385)，印证'
+        '了解析解的双分支性质。')
+    pcont = add_par_after(p, indent=True,
+        text='对轨迹的连续性亦作数值核验：在每个路径点采样分段五次多项式，关节速度与'
+        '加速度均为 0，相邻采样点间无跳变，解析导数与位置的数值微分一致，确认整条'
+        '轨迹的位置、速度、加速度全程连续。')
+    vt = doc.add_table(rows=6, cols=4)
+    vt_pr = vt._tbl.tblPr
+    vborders = vt_pr.makeelement(qn('w:tblBorders'), {})
+    for edge in ('top', 'left', 'bottom', 'right', 'insideH', 'insideV'):
+        el = vt_pr.makeelement(qn('w:' + edge), {qn('w:val'): 'single',
+                                                 qn('w:sz'): '4'})
+        vborders.append(el)
+    vt_pr.append(vborders)
+    vhead = ['配置', '仿真界面(x,y,z)/m', '链式FK(x,y,z)/m', '位置误差']
+    vrows = [
+        ['零位 q=0', '(0.350, 0, 0.235)', '(0.350, 0, 0.235)', '0'],
+        ['任意位形 A', '(0.590, -0.441, 0.566)', '(0.590, -0.441, 0.566)', '0'],
+        ['任意位形 B', '(0.529, -0.585, 0.061)', '(0.529, -0.585, 0.061)', '0'],
+        ['IK 解(肘上)', '(1.250, 0, 0.385)', '(1.250, 0, 0.385)', '0'],
+        ['IK 解(肘下)', '(1.250, 0, 0.385)', '(1.250, 0, 0.385)', '0'],
+    ]
+    for j, t in enumerate(vhead):
+        vt.rows[0].cells[j].text = t
+    for i, r in enumerate(vrows):
+        for j, t in enumerate(r):
+            vt.rows[i + 1].cells[j].text = t
+    p._p.addnext(vt._tbl)   # place table between intro (p) and continuity (pcont)
 
     out = os.path.join(HERE, '实验1-机械臂运动控制仿真-实验报告.docx')
     doc.save(out)

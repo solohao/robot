@@ -1,2 +1,8 @@
 __pycache__/
 *.pyc
+
+# LaTeX 构建中间产物
+report/report.aux
+report/report.log
+report/report.out
+report/report.pdf
