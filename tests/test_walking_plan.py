@@ -49,6 +49,7 @@ class WalkingPlanTest(unittest.TestCase):
         ])
 
         self.assertGreater(clearance, MIN_LINK_CLEARANCE)
+        self.assertLess(np.ptp(samples, axis=0).max(), 1.8)
         self.assertLess(foot_positions[:, 2].max(), 0.39)
         self.assertLess(foot_positions[:, 1].max(), 0.37)
         self.assertTrue(np.allclose(
