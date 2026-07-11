@@ -1,0 +1,16 @@
+{
+  "known_cells_initial": 41067,
+  "known_cells_final": 45925,
+  "known_cells_delta": 4858,
+  "odom_initial": {
+    "x": 1.0013924760406612e-09,
+    "y": 2.46046735452011e-22,
+    "z": 0.0
+  },
+  "odom_final": {
+    "x": 0.5245507246580985,
+    "y": 0.16582491958013612,
+    "z": 0.0
+  },
+  "odom_displacement": 0.5501375879200879
+}

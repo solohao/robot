@@ -1,0 +1,16 @@
+{
+  "status": "stalled",
+  "wall_duration": 303.22238489000006,
+  "sample_count": 627,
+  "max_wall_gap": 4.941866054000002,
+  "first": {
+    "wall": 203.00780456,
+    "sec": 11,
+    "nanosec": 500000000
+  },
+  "last": {
+    "wall": 494.62354337,
+    "sec": 74,
+    "nanosec": 100000000
+  }
+}
