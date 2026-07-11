@@ -65,16 +65,17 @@ ros2 run tb4_experiment_bringup vmware_simulation
    OAK-D 链接、关节、碰撞体和 TF 均保留；展开后的标准机器人 URDF 必须仍有
    `rplidar` GPU lidar，且其 `always_on` 为 `true`。
 
-3. 同一 overlay 复制官方 `irobot_create_description`，将导航不依赖的
-   Create 3 cliff 和 IR intensity GPU lidar 从 62 Hz 降为 1 Hz，保留传感器
-   几何、话题和底盘安全节点。
+3. 同一 overlay 复制官方 `irobot_create_description` 和
+   `irobot_create_ignition_bringup`，关闭导航不依赖的 Create 3 cliff 和
+   IR intensity GPU lidar 及其 ROS 桥接；传感器几何、里程计、TF、底盘控制和
+   RPLIDAR 保持不变。
 
 4. 将缓存 overlay 放在 ament 搜索路径首位，Gazebo 使用 Mesa 软件渲染并以
    server-only 模式启动；作用域外的 RViz 继续使用 VMware 3D 加速。
 
-5. 启动检查器在 180 秒墙钟超时内验证 `/clock` 至少推进三次，且 `/scan`
-   包含大于 `range_min + 0.05 m` 的有限环境返回。SLAM 模式默认关闭 Nav2
-   规划和控制服务器，导航模式保持启用。
+5. 启动检查器在 180 秒墙钟超时内持续观察 `/clock` 120 秒；时钟连续
+   15 秒不推进即失败，同时要求 `/scan` 包含大于 `range_min + 0.05 m`
+   的有限环境返回。SLAM 模式默认关闭 Nav2 规划和控制服务器，导航模式保持启用。
  
 此调整仍保留 warehouse/`shelf_7` 碰撞体、TurtleBot4 几何、轮式动力学、
 里程计、TF、RPLIDAR、AMCL、全局/局部代价地图、Planner Server、DWB
