@@ -18,6 +18,7 @@ from launch.actions import (
     DeclareLaunchArgument,
     GroupAction,
     IncludeLaunchDescription,
+    SetEnvironmentVariable,
     TimerAction,
 )
 from launch.conditions import IfCondition, UnlessCondition
@@ -36,10 +37,19 @@ def generate_launch_description():
     gz_args = LaunchConfiguration('gz_args')
     slam = LaunchConfiguration('slam')
     map_file = LaunchConfiguration('map')
+    software_rendering = LaunchConfiguration('software_rendering')
+    start_nav2 = LaunchConfiguration('start_nav2')
+    start_rviz = LaunchConfiguration('start_rviz')
+    validate_simulation = LaunchConfiguration('validate_simulation')
 
     simulator = GroupAction(
         scoped=True,
         actions=[
+            SetEnvironmentVariable(
+                name='LIBGL_ALWAYS_SOFTWARE',
+                value='1',
+                condition=IfCondition(software_rendering),
+            ),
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
                     PathJoinSubstitution(
@@ -93,6 +103,7 @@ def generate_launch_description():
                 [bringup_share, 'config', 'nav2_astar.yaml']
             ),
         }.items(),
+        condition=IfCondition(start_nav2),
     )
 
     rviz = Node(
@@ -109,11 +120,25 @@ def generate_launch_description():
             ('/tf_static', 'tf_static'),
         ],
         output='screen',
+        condition=IfCondition(start_rviz),
+    )
+
+    simulation_validator = Node(
+        package='tb4_experiment_bringup',
+        executable='validate_vmware_simulation',
+        name='vmware_simulation_validator',
+        output='screen',
+        condition=IfCondition(validate_simulation),
     )
 
     delayed_navigation = TimerAction(
         period=5.0,
         actions=[localization, mapping, nav2, rviz],
+    )
+
+    delayed_validation = TimerAction(
+        period=10.0,
+        actions=[simulation_validator],
     )
 
     return LaunchDescription(
@@ -134,6 +159,30 @@ def generate_launch_description():
                 description='Override arguments passed to Gazebo Sim.',
             ),
             DeclareLaunchArgument(
+                'software_rendering',
+                default_value='false',
+                choices=['true', 'false'],
+                description='Use Mesa software rendering for Gazebo only.',
+            ),
+            DeclareLaunchArgument(
+                'start_nav2',
+                default_value='true',
+                choices=['true', 'false'],
+                description='Start the Nav2 planning and control servers.',
+            ),
+            DeclareLaunchArgument(
+                'start_rviz',
+                default_value='true',
+                choices=['true', 'false'],
+                description='Start RViz with the experiment configuration.',
+            ),
+            DeclareLaunchArgument(
+                'validate_simulation',
+                default_value='false',
+                choices=['true', 'false'],
+                description='Check that simulation time and laser ranges are valid.',
+            ),
+            DeclareLaunchArgument(
                 'slam',
                 default_value='false',
                 choices=['true', 'false'],
@@ -148,5 +197,6 @@ def generate_launch_description():
             ),
             simulator,
             delayed_navigation,
+            delayed_validation,
         ]
     )

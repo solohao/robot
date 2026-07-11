@@ -7,6 +7,7 @@
 | ROS 2 仿真源码 | `ros2_ws/src/` |
 | 自定义 A* 规划器 | `ros2_ws/src/tb4_astar_planner/` |
 | Ignition/SLAM/AMCL/Nav2/RViz 启动与配置 | `ros2_ws/src/tb4_experiment_bringup/` |
+| VMware 一键低负载预设 | `ros2 run tb4_experiment_bringup vmware_simulation` |
 | SLAM 保存地图 | `maps/lab_map.yaml`、`maps/lab_map.pgm` |
 | LaTeX 报告源文件 | `report/report.tex` |
 | Word 实验报告 | `report/实验二-TurtleBot4自主导航仿真-实验报告.docx` |
@@ -33,9 +34,11 @@
 连续性监视出现过一次超过 10 秒的监听间隙；时钟随后恢复并完成导航。该项在报告中
 如实记录为性能限制，没有修改为通过。
 
-证据采集使用临时低负载 world/overlay：Gazebo server-only、OAK-D 关闭、RPLIDAR
-降至 10 Hz、射线可视化关闭、`max_step_size=0.1`。这些设置不属于源码默认前提；
-在具备硬件 3D 加速的 Ubuntu 22.04 主机上可直接使用默认 world 与传感器参数复测。
+证据采集使用低负载 world/overlay：Gazebo server-only、OAK-D 关闭、RPLIDAR
+降至 10 Hz、射线可视化关闭、`max_step_size=0.1`。仓库提供
+`vmware_simulation` 一键入口，在用户缓存目录生成 overlay，并将软件渲染仅限制
+在 Gazebo 进程；RViz 仍使用 VMware 3D 加速。具备原生硬件 3D 加速的
+Ubuntu 22.04 主机可直接使用默认 world 与传感器参数复测。
 
 ## 填写学生信息
 
