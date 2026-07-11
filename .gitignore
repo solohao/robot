@@ -6,3 +6,8 @@ report/report.aux
 report/report.log
 report/report.out
 report/report.pdf
+
+# ROS 2 workspace build products
+experiment2/ros2_ws/build/
+experiment2/ros2_ws/install/
+experiment2/ros2_ws/log/
