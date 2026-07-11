@@ -18,13 +18,13 @@ from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, Time
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch_ros.actions import Node
 
 
 def generate_launch_description():
     bringup_share = get_package_share_directory('tb4_experiment_bringup')
     navigation_share = get_package_share_directory('turtlebot4_navigation')
     simulator_share = get_package_share_directory('turtlebot4_ignition_bringup')
-    viz_share = get_package_share_directory('turtlebot4_viz')
 
     world = LaunchConfiguration('world')
     model = LaunchConfiguration('model')
@@ -43,6 +43,9 @@ def generate_launch_description():
             'model': model,
             'rviz': 'false',
             'gz_args': gz_args,
+            'localization': 'false',
+            'slam': 'false',
+            'nav2': 'false',
         }.items(),
     )
 
@@ -82,14 +85,20 @@ def generate_launch_description():
         }.items(),
     )
 
-    rviz = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            PathJoinSubstitution([viz_share, 'launch', 'view_robot.launch.py'])
-        ),
-        launch_arguments={
-            'use_sim_time': 'true',
-            'model': model,
-        }.items(),
+    rviz = Node(
+        package='rviz2',
+        executable='rviz2',
+        name='rviz2',
+        arguments=[
+            '-d',
+            PathJoinSubstitution([bringup_share, 'config', 'experiment.rviz']),
+        ],
+        parameters=[{'use_sim_time': True}],
+        remappings=[
+            ('/tf', 'tf'),
+            ('/tf_static', 'tf_static'),
+        ],
+        output='screen',
     )
 
     delayed_navigation = TimerAction(

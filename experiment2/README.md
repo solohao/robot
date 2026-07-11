@@ -49,6 +49,7 @@ ros2 launch tb4_experiment_bringup simulation.launch.py
 
 Ignition Gazebo、AMCL、Nav2 和 RViz2 会依次启动。在 RViz2 中先用
 `2D Pose Estimate` 设置初始位姿，再用 `Nav2 Goal` 设置目标。
+项目使用固定俯视角的 `experiment.rviz`，每次启动都会恢复相同地图朝向。
 
 如需覆盖传给 Gazebo Sim 的完整参数（例如使用自定义 SDF），可传入
 `gz_args`：
