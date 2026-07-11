@@ -130,46 +130,66 @@ class SimulationValidator(Node):
             f'{max(finite_ranges):.3f} m.'
         )
 
+    def report_clock_stall(self) -> None:
+        self.get_logger().error(
+            'VMware preset validation failed: /clock stopped advancing '
+            f'for more than {MAX_CLOCK_GAP_SECONDS:.0f} wall seconds.'
+        )
+
 
 def main() -> None:
     rclpy.init()
     validator = SimulationValidator()
     deadline = time.monotonic() + VALIDATION_TIMEOUT_SECONDS
+    validated = False
 
-    while time.monotonic() < deadline:
+    while rclpy.ok() and time.monotonic() < deadline:
         rclpy.spin_once(validator, timeout_sec=1.0)
         wall_time = time.monotonic()
         if validator.clock_has_stalled(wall_time):
-            validator.get_logger().error(
-                'VMware preset validation failed: /clock stopped advancing '
-                f'for more than {MAX_CLOCK_GAP_SECONDS:.0f} wall seconds.'
-            )
+            validator.report_clock_stall()
             validator.destroy_node()
             rclpy.shutdown()
             raise SystemExit(1)
         if validator.clock_is_stable(wall_time) and validator.scan_is_valid():
             validator.report_scan()
-            validator.destroy_node()
-            rclpy.shutdown()
-            return
+            validated = True
+            break
 
-    if validator.clock_messages == 0 or validator.clock_advances == 0:
+    if not validated and (
+        validator.clock_messages == 0 or validator.clock_advances == 0
+    ):
         validator.get_logger().error(
             'VMware preset validation failed: /clock did not advance.'
         )
-    elif validator.scan is None:
+    elif not validated and validator.scan is None:
         validator.get_logger().error(
             'VMware preset validation failed: no /scan message was received.'
         )
-    else:
+    elif not validated:
         validator.get_logger().error(
             'VMware preset validation failed: laser ranges remained at the '
             'minimum distance. Keep software_rendering enabled.'
         )
 
+    if not validated:
+        validator.destroy_node()
+        rclpy.shutdown()
+        raise SystemExit(1)
+
+    validator.get_logger().info(
+        'VMware /clock watchdog remains active for this simulation.'
+    )
+    while rclpy.ok():
+        rclpy.spin_once(validator, timeout_sec=1.0)
+        if validator.clock_has_stalled(time.monotonic()):
+            validator.report_clock_stall()
+            validator.destroy_node()
+            rclpy.shutdown()
+            raise SystemExit(1)
+
     validator.destroy_node()
     rclpy.shutdown()
-    raise SystemExit(1)
 
 
 if __name__ == '__main__':

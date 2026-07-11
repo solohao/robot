@@ -41,16 +41,18 @@ ros2 run tb4_experiment_bringup vmware_simulation
 
 预设执行以下调整：
 
-1. 缓存目录中的 `warehouse-low-resource.sdf` 只将：
+1. 缓存目录中的 `warehouse-low-resource.sdf` 将：
 
    ```xml
    <max_step_size>0.003</max_step_size>
+   <real_time_factor>1.0</real_time_factor>
    ```
 
-   
    改为：
-    ```xml
-   <max_step_size>0.1</max_step_size>
+   ```xml
+   <max_step_size>0.01</max_step_size>
+   <real_time_factor>0.2</real_time_factor>
+   <real_time_update_rate>20</real_time_update_rate>
    ```
  
 2. 临时 ament overlay 完整复制官方 `turtlebot4_description`，只将 OAK-D
@@ -65,17 +67,20 @@ ros2 run tb4_experiment_bringup vmware_simulation
    OAK-D 链接、关节、碰撞体和 TF 均保留；展开后的标准机器人 URDF 必须仍有
    `rplidar` GPU lidar，且其 `always_on` 为 `true`。
 
-3. 同一 overlay 复制官方 `irobot_create_description` 和
-   `irobot_create_ignition_bringup`，关闭导航不依赖的 Create 3 cliff 和
+3. 同一 overlay 复制官方 `irobot_create_control`、`irobot_create_description`
+   和 `irobot_create_ignition_bringup`，关闭导航不依赖的 Create 3 cliff 和
    IR intensity GPU lidar 及其 ROS 桥接；传感器几何、里程计、TF、底盘控制和
    RPLIDAR 保持不变。
 
-4. 将缓存 overlay 放在 ament 搜索路径首位，Gazebo 使用 Mesa 软件渲染并以
-   server-only 模式启动；作用域外的 RViz 继续使用 VMware 3D 加速。
+4. warehouse 使用 `0.01 s` 物理步长、`20 Hz` 墙钟更新率和 `0.2`
+   real-time factor；Create 3 controller 使用匹配的 `100 Hz` 更新率和 `20 Hz`
+   里程计发布率。将缓存 overlay 放在 ament 搜索路径首位，Gazebo 使用 Mesa
+   软件渲染并以 server-only 模式启动；作用域外的 RViz 继续使用 VMware 3D 加速。
 
 5. 启动检查器在 180 秒墙钟超时内持续观察 `/clock` 120 秒；时钟连续
    15 秒不推进即失败，同时要求 `/scan` 包含大于 `range_min + 0.05 m`
-   的有限环境返回。SLAM 模式默认关闭 Nav2 规划和控制服务器，导航模式保持启用。
+   的有限环境返回。通过后 watchdog 持续运行到仿真退出。SLAM 模式默认关闭
+   Nav2 规划和控制服务器，导航模式保持启用。
  
 此调整仍保留 warehouse/`shelf_7` 碰撞体、TurtleBot4 几何、轮式动力学、
 里程计、TF、RPLIDAR、AMCL、全局/局部代价地图、Planner Server、DWB
