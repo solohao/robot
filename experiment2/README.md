@@ -113,6 +113,8 @@ overlay，不修改仓库或 `/opt/ros`，并执行以下低负载设置：
   里程计发布率降为 `20 Hz`；
 - OAK-D 停用，RPLIDAR 保持启用并降为 `10 Hz`；
 - 禁用导航不依赖的 Create 3 cliff/IR GPU lidar 及其 ROS 桥接，保留传感器几何；
+- 不生成充电底座，并停用 TurtleBot 4 HMI/传感器生命周期节点，避免离开底座时
+  启停 OAK-D/RPLIDAR；Create 3 运动控制、里程计和 TF 保持启用；
 - 关闭 RPLIDAR 射线可视化；
 - SLAM 模式默认不启动不需要的 Nav2 规划和控制服务器；
 - 启动后自动观察 `/clock` 120 秒并检查 `/scan`；通过后 watchdog 在整个仿真
