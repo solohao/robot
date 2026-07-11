@@ -24,9 +24,12 @@ fi
 ros_distro="${ROS_DISTRO:-humble}"
 ros_share="/opt/ros/${ros_distro}/share"
 description_source="${ros_share}/turtlebot4_description"
+create_description_source="${ros_share}/irobot_create_description"
 world_source="${ros_share}/turtlebot4_ignition_bringup/worlds/warehouse.sdf"
 
-if [[ ! -d "${description_source}" || ! -f "${world_source}" ]]; then
+if [[ ! -d "${description_source}" ||
+      ! -d "${create_description_source}" ||
+      ! -f "${world_source}" ]]; then
   echo "TurtleBot4 simulator assets were not found under ${ros_share}." >&2
   exit 1
 fi
@@ -34,12 +37,15 @@ fi
 cache_root="${XDG_CACHE_HOME:-${HOME}/.cache}/tb4_experiment_bringup/vmware"
 overlay_root="${cache_root}/overlay"
 description_target="${overlay_root}/share/turtlebot4_description"
+create_description_target="${overlay_root}/share/irobot_create_description"
 world_target="${cache_root}/warehouse-low-resource.sdf"
 
-mkdir -p "${description_target}"
+mkdir -p "${description_target}" "${create_description_target}"
 cp -R "${description_source}/." "${description_target}/"
+cp -R "${create_description_source}/." "${create_description_target}/"
 mkdir -p "${overlay_root}/share/ament_index/resource_index/packages"
 touch \
+  "${overlay_root}/share/ament_index/resource_index/packages/irobot_create_description" \
   "${overlay_root}/share/ament_index/resource_index/packages/turtlebot4_description"
 
 cp "${world_source}" "${world_target}"
@@ -59,6 +65,16 @@ sed -i \
   's#update_rate="62.0" visualize="1"#update_rate="10.0" visualize="false"#' \
   "${rplidar_xacro}"
 
+cliff_xacro="${create_description_target}/urdf/sensors/cliff_sensor.urdf.xacro"
+sed -i \
+  's#name="update_rate"         value="62"#name="update_rate"         value="1"#' \
+  "${cliff_xacro}"
+
+ir_intensity_xacro="${create_description_target}/urdf/sensors/ir_intensity.urdf.xacro"
+sed -i \
+  's#update_rate:=62.0#update_rate:=1.0#' \
+  "${ir_intensity_xacro}"
+
 if ! grep -Fq '<max_step_size>0.1</max_step_size>' "${world_target}"; then
   echo "The warehouse physics preset could not be applied." >&2
   exit 1
@@ -74,6 +90,12 @@ fi
 if ! grep -Fq \
   'update_rate="10.0" visualize="false"' "${rplidar_xacro}"; then
   echo "The RPLIDAR low-resource preset could not be applied." >&2
+  exit 1
+fi
+
+if ! grep -Fq 'name="update_rate"         value="1"' "${cliff_xacro}" ||
+   ! grep -Fq 'update_rate:=1.0' "${ir_intensity_xacro}"; then
+  echo "The Create 3 sensor low-resource preset could not be applied." >&2
   exit 1
 fi
 
@@ -109,6 +131,7 @@ command=(
 echo "VMware preset prepared in ${cache_root}"
 echo "Gazebo: Mesa software rendering, server-only"
 echo "RViz: VMware hardware rendering"
+echo "Create 3 cliff/IR sensors: 1 Hz"
 
 if [[ "${TB4_VMWARE_DRY_RUN:-0}" == "1" ]]; then
   printf 'Command:'
