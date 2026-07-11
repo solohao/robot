@@ -7,9 +7,10 @@ Nav2 `GlobalPlanner` 接口实现的代价感知 A* 全局路径规划器。
 
 - `ros2_ws/src/tb4_astar_planner/`：A* 规划器插件与单元测试
 - `ros2_ws/src/tb4_experiment_bringup/`：仿真和实机启动文件、Nav2 参数
-- `maps/`：SLAM 保存的地图
-- `report/`：实验报告与结果图
-- `video/`：实验视频或视频说明
+- `maps/`：SLAM 保存的 `lab_map.yaml` 与 `lab_map.pgm`
+- `report/`：LaTeX 源文件、Word/PDF 实验报告、图表和客观测试数据
+- `video/`：SLAM 增量建图与自主导航录屏
+- `SUBMISSION.md`：课程提交资料包清单与验收结果
 
 ## 安装
 
@@ -109,3 +110,28 @@ ros2 launch tb4_experiment_bringup real_robot.launch.py slam:=true
 ```
 
 仿真使用 `use_sim_time=true`，实机启动文件会切换为系统时间。
+
+## 仿真结果
+
+已完成两个独立流程：
+
+1. SLAM Toolbox 增量建图：机器人移动 `0.550 m`，已知栅格增加 `4,858`，
+   保存地图分辨率为 `0.05 m/cell`。
+2. AMCL + 自定义 A* + Nav2 导航：路径包含 `189` 个位姿，绕过 `shelf_7`；
+   同一目标 UUID 从 `EXECUTING (2)` 进入 `SUCCEEDED (4)`，最终距目标
+   `0.215 m`。
+
+低配测试主机的导航流程出现过一次超过 10 秒的 `/clock` 监听间隙，随后时钟恢复并
+完成导航。完整实验条件、低负载配置、客观数据和限制说明见
+[`report/实验二-TurtleBot4自主导航仿真-实验报告.pdf`](report/实验二-TurtleBot4自主导航仿真-实验报告.pdf)。
+
+## 重新生成报告
+
+```bash
+sudo apt install pandoc texlive-xetex texlive-lang-chinese python3-docx
+cd experiment2/report
+make all
+```
+
+Word 报告由 Pandoc 直接读取 `report.tex` 生成，再应用 `reference.docx` 的中文论文
+样式；PDF 使用 XeLaTeX 编译。

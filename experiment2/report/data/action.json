@@ -1,0 +1,22 @@
+{
+  "events": [
+    {
+      "goal_id": "45d5c769a74c6f79bb0953a622d30d3e",
+      "stamp": {
+        "nanosec": 100000000,
+        "sec": 53
+      },
+      "status": 2
+    },
+    {
+      "goal_id": "45d5c769a74c6f79bb0953a622d30d3e",
+      "stamp": {
+        "nanosec": 100000000,
+        "sec": 53
+      },
+      "status": 4
+    }
+  ],
+  "terminal_goal_id": "45d5c769a74c6f79bb0953a622d30d3e",
+  "terminal_status": 4
+}
