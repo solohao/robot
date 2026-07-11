@@ -50,6 +50,14 @@ ros2 launch tb4_experiment_bringup simulation.launch.py
 Ignition Gazebo、AMCL、Nav2 和 RViz2 会依次启动。在 RViz2 中先用
 `2D Pose Estimate` 设置初始位姿，再用 `Nav2 Goal` 设置目标。
 
+如需覆盖传给 Gazebo Sim 的完整参数（例如使用自定义 SDF），可传入
+`gz_args`：
+
+```bash
+ros2 launch tb4_experiment_bringup simulation.launch.py \
+  gz_args:="/absolute/path/to/custom-world.sdf -r -s -v 2"
+```
+
 切换其他官方场景时，地图必须与场景一致：
 
 ```bash

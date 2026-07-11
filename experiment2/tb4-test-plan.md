@@ -13,8 +13,8 @@ Nav2 Goal 操作，证明 Humble 默认 `GridBased` 标识实际动态加载
 
 ## 代码与 UI 路径依据
 
-- `simulation.launch.py:29-43` 将 `world` 和 `model` 传给官方 TurtleBot4
-  Ignition 启动，并关闭重复 RViz。
+- `simulation.launch.py` 将 `world`、`model` 和 `gz_args` 传给官方
+  TurtleBot4 Ignition 启动，并关闭重复 RViz。
 - `simulation.launch.py:71-90` 使用项目内 `nav2_astar.yaml` 启动 Nav2，
   再启动官方 `view_robot.launch.py`。
 - `nav2_astar.yaml:218-229` 将 `GridBased` 映射到

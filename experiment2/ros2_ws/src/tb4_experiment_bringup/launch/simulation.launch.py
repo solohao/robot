@@ -28,6 +28,7 @@ def generate_launch_description():
 
     world = LaunchConfiguration('world')
     model = LaunchConfiguration('model')
+    gz_args = LaunchConfiguration('gz_args')
     slam = LaunchConfiguration('slam')
     map_file = LaunchConfiguration('map')
 
@@ -41,6 +42,7 @@ def generate_launch_description():
             'world': world,
             'model': model,
             'rviz': 'false',
+            'gz_args': gz_args,
         }.items(),
     )
 
@@ -106,6 +108,11 @@ def generate_launch_description():
                 'model',
                 default_value='standard',
                 choices=['standard', 'lite'],
+            ),
+            DeclareLaunchArgument(
+                'gz_args',
+                default_value='',
+                description='Override arguments passed to Gazebo Sim.',
             ),
             DeclareLaunchArgument(
                 'slam',
