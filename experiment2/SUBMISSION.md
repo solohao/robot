@@ -35,7 +35,8 @@
 如实记录为性能限制，没有修改为通过。
 
 证据采集使用低负载 world/overlay：Gazebo server-only、OAK-D 关闭、RPLIDAR
-降至 10 Hz、射线可视化关闭、`max_step_size=0.1`。仓库提供
+降至 10 Hz、Create 3 cliff/IR 辅助传感器降至 1 Hz、射线可视化关闭、
+`max_step_size=0.1`。仓库提供
 `vmware_simulation` 一键入口，在用户缓存目录生成 overlay，并将软件渲染仅限制
 在 Gazebo 进程；RViz 仍使用 VMware 3D 加速。具备原生硬件 3D 加速的
 Ubuntu 22.04 主机可直接使用默认 world 与传感器参数复测。

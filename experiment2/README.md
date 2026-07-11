@@ -109,6 +109,7 @@ overlay，不修改仓库或 `/opt/ros`，并执行以下低负载设置：
 - RViz 不继承软件渲染变量，继续使用 VMware 3D 加速；
 - warehouse `max_step_size` 设为 `0.1`；
 - OAK-D 停用，RPLIDAR 保持启用并降为 `10 Hz`；
+- Create 3 的 cliff/IR 辅助射线传感器降为 `1 Hz`，避免软件渲染长时间停滞；
 - 关闭 RPLIDAR 射线可视化；
 - SLAM 模式默认不启动不需要的 Nav2 规划和控制服务器；
 - 启动后自动检查 `/clock` 和 `/scan`，有效扫描必须包含大于最小量程的环境返回。
