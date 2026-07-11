@@ -544,5 +544,9 @@ The path '/home/liujunhao/tb4-test-runtime/overlay' ... doesn't contain any
 - 该次干净运行日志明确报告 controller 周期 `0.001 s` 快于物理周期 `0.1 s`。
   当前修复改用 `0.01 s` 物理步长、`20 Hz` 墙钟更新率、`0.2` real-time factor
   和匹配的 `100 Hz` controller，并让时钟 watchdog 在验证通过后继续运行；
+- 用户首次运行物理/控制周期修复时，因本机 `control.yaml` 数字或注释格式与
+  严格文本预期不同，脚本在启动 Gazebo 前以
+  `The Create 3 controller low-resource preset could not be applied.` 安全退出；
+  controller 变换和校验现使用保留缩进、兼容整数/小数及可选注释的行匹配；
 - 下一步应让用户拉取物理/控制周期修复，再次进行短程遥控运动；
 - 之后再保存地图、切换 AMCL/A*/Nav2，并验证绕过 `shelf_7` 到达目标。
