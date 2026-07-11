@@ -548,5 +548,14 @@ The path '/home/liujunhao/tb4-test-runtime/overlay' ... doesn't contain any
   严格文本预期不同，脚本在启动 Gazebo 前以
   `The Create 3 controller low-resource preset could not be applied.` 安全退出；
   controller 变换和校验现使用保留缩进、兼容整数/小数及可选注释的行匹配；
-- 下一步应让用户拉取物理/控制周期修复，再次进行短程遥控运动；
+- 用户拉取兼容修复后，静止状态再次通过 120 秒验证并进入持续 watchdog；短程
+  遥控后 watchdog 在墙钟 15 秒内确认 `/clock` 再次停止。停滞快照显示 6 核
+  load average 仅 `1.68`、可用内存 `4.5 GiB`、swap 为 0，Gazebo 平均 CPU
+  `40.3%` 且采样时各线程大多等待，因此不是整机 CPU/内存耗尽；
+- 同次日志中，机器人移动后先出现 `OAKD started` 和 `RPLIDAR started`，随后
+  对应服务等待失败并停钟。官方 Humble spawn 固定把机器人放在底座上，并由
+  `turtlebot4_node` 在离开底座时切换传感器生命周期；当前 VMware 预设在缓存
+  overlay 中不生成底座，也不启动该高层 HMI/传感器生命周期节点，保留 Create 3
+  运动控制、里程计、TF 和 RPLIDAR；
+- 下一步应让用户拉取 undocked VMware 预设，再次进行短程遥控运动；
 - 之后再保存地图、切换 AMCL/A*/Nav2，并验证绕过 `shelf_7` 到达目标。

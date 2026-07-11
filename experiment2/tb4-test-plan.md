@@ -67,9 +67,11 @@ ros2 run tb4_experiment_bringup vmware_simulation
    OAK-D 链接、关节、碰撞体和 TF 均保留；展开后的标准机器人 URDF 必须仍有
    `rplidar` GPU lidar，且其 `always_on` 为 `true`。
 
-3. 同一 overlay 复制官方 `irobot_create_control`、`irobot_create_description`
-   和 `irobot_create_ignition_bringup`，关闭导航不依赖的 Create 3 cliff 和
-   IR intensity GPU lidar 及其 ROS 桥接；传感器几何、里程计、TF、底盘控制和
+3. 同一 overlay 复制官方 `irobot_create_control`、`irobot_create_description`、
+   `irobot_create_ignition_bringup` 和 `turtlebot4_ignition_bringup`，关闭导航
+   不依赖的 Create 3 cliff 和 IR intensity GPU lidar 及其 ROS 桥接；VMware
+   预设不生成充电底座，也不启动 TurtleBot 4 HMI/传感器生命周期节点，避免离开
+   底座时启停 OAK-D/RPLIDAR。传感器几何、Create 3 运动控制、里程计、TF 和
    RPLIDAR 保持不变。
 
 4. warehouse 使用 `0.01 s` 物理步长、`20 Hz` 墙钟更新率和 `0.2`

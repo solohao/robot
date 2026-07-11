@@ -27,12 +27,14 @@ description_source="${ros_share}/turtlebot4_description"
 create_control_source="${ros_share}/irobot_create_control"
 create_description_source="${ros_share}/irobot_create_description"
 create_ignition_source="${ros_share}/irobot_create_ignition_bringup"
-world_source="${ros_share}/turtlebot4_ignition_bringup/worlds/warehouse.sdf"
+simulator_source="${ros_share}/turtlebot4_ignition_bringup"
+world_source="${simulator_source}/worlds/warehouse.sdf"
 
 if [[ ! -d "${description_source}" ||
       ! -d "${create_control_source}" ||
       ! -d "${create_description_source}" ||
       ! -d "${create_ignition_source}" ||
+      ! -d "${simulator_source}" ||
       ! -f "${world_source}" ]]; then
   echo "TurtleBot4 simulator assets were not found under ${ros_share}." >&2
   exit 1
@@ -44,23 +46,27 @@ description_target="${overlay_root}/share/turtlebot4_description"
 create_control_target="${overlay_root}/share/irobot_create_control"
 create_description_target="${overlay_root}/share/irobot_create_description"
 create_ignition_target="${overlay_root}/share/irobot_create_ignition_bringup"
+simulator_target="${overlay_root}/share/turtlebot4_ignition_bringup"
 world_target="${cache_root}/warehouse-low-resource.sdf"
 
 mkdir -p \
   "${description_target}" \
   "${create_control_target}" \
   "${create_description_target}" \
-  "${create_ignition_target}"
+  "${create_ignition_target}" \
+  "${simulator_target}"
 cp -R "${description_source}/." "${description_target}/"
 cp -R "${create_control_source}/." "${create_control_target}/"
 cp -R "${create_description_source}/." "${create_description_target}/"
 cp -R "${create_ignition_source}/." "${create_ignition_target}/"
+cp -R "${simulator_source}/." "${simulator_target}/"
 mkdir -p "${overlay_root}/share/ament_index/resource_index/packages"
 touch \
   "${overlay_root}/share/ament_index/resource_index/packages/irobot_create_control" \
   "${overlay_root}/share/ament_index/resource_index/packages/irobot_create_description" \
   "${overlay_root}/share/ament_index/resource_index/packages/irobot_create_ignition_bringup" \
-  "${overlay_root}/share/ament_index/resource_index/packages/turtlebot4_description"
+  "${overlay_root}/share/ament_index/resource_index/packages/turtlebot4_description" \
+  "${overlay_root}/share/ament_index/resource_index/packages/turtlebot4_ignition_bringup"
 
 cp "${world_source}" "${world_target}"
 sed -i \
@@ -107,6 +113,20 @@ sed -i \
   '/^[[:space:]]*ld\.add_action(cliff_bridges)[[:space:]]*$/d;
    /^[[:space:]]*ld\.add_action(ir_bridges)[[:space:]]*$/d' \
   "${create_bridge_launch}"
+
+spawn_launch="${simulator_target}/launch/turtlebot4_spawn.launch.py"
+sed -E -i \
+  's/^([[:space:]]*)z_robot[[:space:]]*=.*$/\1z_robot = OffsetParser(z, 0.01)/;
+   /^[[:space:]]*# Dock description[[:space:]]*$/,/^[[:space:]]*# Spawn TurtleBot 4[[:space:]]*$/ {
+     /^[[:space:]]*# Spawn TurtleBot 4[[:space:]]*$/!d
+   };
+   /^[[:space:]]*# Spawn Dock[[:space:]]*$/,/^[[:space:]]*# ROS IGN bridge[[:space:]]*$/ {
+     /^[[:space:]]*# ROS IGN bridge[[:space:]]*$/!d
+   };
+   /^[[:space:]]*# TurtleBot 4 nodes[[:space:]]*$/,/^[[:space:]]*# Create 3 nodes[[:space:]]*$/ {
+     /^[[:space:]]*# Create 3 nodes[[:space:]]*$/!d
+   }' \
+  "${spawn_launch}"
 
 if ! grep -Fq '<max_step_size>0.01</max_step_size>' "${world_target}" ||
    ! grep -Fq '<real_time_factor>0.2</real_time_factor>' "${world_target}" ||
@@ -158,6 +178,20 @@ if ! grep -Fq '<always_on>false</always_on>' "${create_common_xacro}" ||
   exit 1
 fi
 
+if grep -Fq \
+     'PythonLaunchDescriptionSource([dock_description_launch])' \
+     "${spawn_launch}" ||
+   grep -Fq "'-topic', 'standard_dock_description'" "${spawn_launch}" ||
+   ! grep -Eq \
+     '^[[:space:]]*z_robot[[:space:]]*=[[:space:]]*OffsetParser[(]z,[[:space:]]*0[.]01[)]' \
+     "${spawn_launch}" ||
+   grep -Fq \
+     'PythonLaunchDescriptionSource([turtlebot4_node_launch])' \
+     "${spawn_launch}"; then
+  echo "The undocked VMware spawn preset could not be applied." >&2
+  exit 1
+fi
+
 export AMENT_PREFIX_PATH="${overlay_root}${AMENT_PREFIX_PATH:+:${AMENT_PREFIX_PATH}}"
 unset LIBGL_ALWAYS_SOFTWARE
 
@@ -191,6 +225,7 @@ echo "VMware preset prepared in ${cache_root}"
 echo "Gazebo: Mesa software rendering, server-only"
 echo "RViz: VMware hardware rendering"
 echo "Create 3 cliff/IR GPU lidar: disabled"
+echo "Dock and TurtleBot 4 sensor lifecycle: disabled"
 echo "Physics/controller: 0.01 s step, 20 Hz wall updates, 100 Hz control"
 
 if [[ "${TB4_VMWARE_DRY_RUN:-0}" == "1" ]]; then
