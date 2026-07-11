@@ -14,7 +14,12 @@
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, TimerAction
+from launch.actions import (
+    DeclareLaunchArgument,
+    GroupAction,
+    IncludeLaunchDescription,
+    TimerAction,
+)
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
@@ -32,21 +37,26 @@ def generate_launch_description():
     slam = LaunchConfiguration('slam')
     map_file = LaunchConfiguration('map')
 
-    simulator = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            PathJoinSubstitution(
-                [simulator_share, 'launch', 'turtlebot4_ignition.launch.py']
+    simulator = GroupAction(
+        scoped=True,
+        actions=[
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(
+                    PathJoinSubstitution(
+                        [simulator_share, 'launch', 'turtlebot4_ignition.launch.py']
+                    )
+                ),
+                launch_arguments={
+                    'world': world,
+                    'model': model,
+                    'rviz': 'false',
+                    'gz_args': gz_args,
+                    'localization': 'false',
+                    'slam': 'false',
+                    'nav2': 'false',
+                }.items(),
             )
-        ),
-        launch_arguments={
-            'world': world,
-            'model': model,
-            'rviz': 'false',
-            'gz_args': gz_args,
-            'localization': 'false',
-            'slam': 'false',
-            'nav2': 'false',
-        }.items(),
+        ],
     )
 
     localization = IncludeLaunchDescription(
