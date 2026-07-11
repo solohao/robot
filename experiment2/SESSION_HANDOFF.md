@@ -132,15 +132,19 @@ ros2 run tb4_experiment_bringup vmware_simulation slam:=true
 1. 在 `~/.cache/tb4_experiment_bringup/vmware/` 自动建立运行资源；
 2. 从 `/opt/ros/humble` 复制官方 world 和 description 到用户缓存；
 3. 不修改 `/opt/ros/humble`；
-4. warehouse `max_step_size: 0.003 -> 0.1`；
+4. warehouse `max_step_size: 0.003 -> 0.01`，墙钟更新率设为 `20 Hz`，
+   `real_time_factor: 1.0 -> 0.2`；
 5. OAK-D `always_on=0`、`update_rate=1`、关闭可视化；
 6. RPLIDAR 保持启用，降为 10 Hz，关闭射线可视化；
 7. 关闭 Create 3 cliff/IR 辅助 GPU lidar 及其 ROS 桥接；
-8. Gazebo 使用 server-only；
-9. 仅 Gazebo 进程使用 `LIBGL_ALWAYS_SOFTWARE=1`；
-10. RViz 不继承软件渲染变量，继续使用 VMware SVGA3D；
-11. `slam:=true` 时默认不启动不需要的 Nav2 服务器；
-12. 自动观察 `/clock` 120 秒并验证 `/scan`；时钟连续 15 秒不推进即失败。
+8. Create 3 controller `update_rate: 1000 -> 100 Hz`，里程计
+   `publish_rate: 62 -> 20 Hz`；
+9. Gazebo 使用 server-only；
+10. 仅 Gazebo 进程使用 `LIBGL_ALWAYS_SOFTWARE=1`；
+11. RViz 不继承软件渲染变量，继续使用 VMware SVGA3D；
+12. `slam:=true` 时默认不启动不需要的 Nav2 服务器；
+13. 自动观察 `/clock` 120 秒并验证 `/scan`；通过后 watchdog 持续运行，
+   时钟连续 15 秒不推进即失败。
 
 验证通过日志类似：
 
@@ -534,5 +538,11 @@ The path '/home/liujunhao/tb4-test-runtime/overlay' ... doesn't contain any
   `1124.1 s`，说明问题仍是 Gazebo 负载而不是键盘或 A*；
 - 严格降载修复进一步关闭 11 个 cliff/IR GPU lidar 及其 ROS 桥接，只保留实验
   所需的 RPLIDAR、里程计、TF 和底盘控制；
-- 下一步应让用户拉取严格降载修复，复测 2–3 分钟时钟和短程遥控运动；
+- 清理两套残留 Gazebo 后，严格降载版本在单实例静止状态通过了 120 秒验证，
+  `/scan` 有效范围为 `1.336–11.989 m`；短程遥控使地图由 `447×301` 增长到
+  `447×386`，随后 `/clock` 和 `/odom` 再次停止；
+- 该次干净运行日志明确报告 controller 周期 `0.001 s` 快于物理周期 `0.1 s`。
+  当前修复改用 `0.01 s` 物理步长、`20 Hz` 墙钟更新率、`0.2` real-time factor
+  和匹配的 `100 Hz` controller，并让时钟 watchdog 在验证通过后继续运行；
+- 下一步应让用户拉取物理/控制周期修复，再次进行短程遥控运动；
 - 之后再保存地图、切换 AMCL/A*/Nav2，并验证绕过 `shelf_7` 到达目标。

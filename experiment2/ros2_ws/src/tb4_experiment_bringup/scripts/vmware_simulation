@@ -24,11 +24,13 @@ fi
 ros_distro="${ROS_DISTRO:-humble}"
 ros_share="/opt/ros/${ros_distro}/share"
 description_source="${ros_share}/turtlebot4_description"
+create_control_source="${ros_share}/irobot_create_control"
 create_description_source="${ros_share}/irobot_create_description"
 create_ignition_source="${ros_share}/irobot_create_ignition_bringup"
 world_source="${ros_share}/turtlebot4_ignition_bringup/worlds/warehouse.sdf"
 
 if [[ ! -d "${description_source}" ||
+      ! -d "${create_control_source}" ||
       ! -d "${create_description_source}" ||
       ! -d "${create_ignition_source}" ||
       ! -f "${world_source}" ]]; then
@@ -39,27 +41,39 @@ fi
 cache_root="${XDG_CACHE_HOME:-${HOME}/.cache}/tb4_experiment_bringup/vmware"
 overlay_root="${cache_root}/overlay"
 description_target="${overlay_root}/share/turtlebot4_description"
+create_control_target="${overlay_root}/share/irobot_create_control"
 create_description_target="${overlay_root}/share/irobot_create_description"
 create_ignition_target="${overlay_root}/share/irobot_create_ignition_bringup"
 world_target="${cache_root}/warehouse-low-resource.sdf"
 
 mkdir -p \
   "${description_target}" \
+  "${create_control_target}" \
   "${create_description_target}" \
   "${create_ignition_target}"
 cp -R "${description_source}/." "${description_target}/"
+cp -R "${create_control_source}/." "${create_control_target}/"
 cp -R "${create_description_source}/." "${create_description_target}/"
 cp -R "${create_ignition_source}/." "${create_ignition_target}/"
 mkdir -p "${overlay_root}/share/ament_index/resource_index/packages"
 touch \
+  "${overlay_root}/share/ament_index/resource_index/packages/irobot_create_control" \
   "${overlay_root}/share/ament_index/resource_index/packages/irobot_create_description" \
   "${overlay_root}/share/ament_index/resource_index/packages/irobot_create_ignition_bringup" \
   "${overlay_root}/share/ament_index/resource_index/packages/turtlebot4_description"
 
 cp "${world_source}" "${world_target}"
 sed -i \
-  's#<max_step_size>0.003</max_step_size>#<max_step_size>0.1</max_step_size>#' \
+  's#<max_step_size>0.003</max_step_size>#<max_step_size>0.01</max_step_size>#;
+   s#<real_time_factor>1.0</real_time_factor>#<real_time_factor>0.2</real_time_factor>\
+      <real_time_update_rate>20</real_time_update_rate>#' \
   "${world_target}"
+
+control_config="${create_control_target}/config/control.yaml"
+sed -i \
+  's#update_rate: 1000 #update_rate: 100 #;
+   s#publish_rate: 62.0#publish_rate: 20.0#' \
+  "${control_config}"
 
 oakd_xacro="${description_target}/urdf/sensors/oakd.urdf.xacro"
 sed -i \
@@ -94,8 +108,18 @@ sed -i \
    /^[[:space:]]*ld\.add_action(ir_bridges)[[:space:]]*$/d' \
   "${create_bridge_launch}"
 
-if ! grep -Fq '<max_step_size>0.1</max_step_size>' "${world_target}"; then
+if ! grep -Fq '<max_step_size>0.01</max_step_size>' "${world_target}" ||
+   ! grep -Fq '<real_time_factor>0.2</real_time_factor>' "${world_target}" ||
+   ! grep -Fq \
+     '<real_time_update_rate>20</real_time_update_rate>' \
+     "${world_target}"; then
   echo "The warehouse physics preset could not be applied." >&2
+  exit 1
+fi
+
+if ! grep -Fq 'update_rate: 100 # Hz' "${control_config}" ||
+   ! grep -Fq 'publish_rate: 20.0' "${control_config}"; then
+  echo "The Create 3 controller low-resource preset could not be applied." >&2
   exit 1
 fi
 
@@ -160,6 +184,7 @@ echo "VMware preset prepared in ${cache_root}"
 echo "Gazebo: Mesa software rendering, server-only"
 echo "RViz: VMware hardware rendering"
 echo "Create 3 cliff/IR GPU lidar: disabled"
+echo "Physics/controller: 0.01 s step, 20 Hz wall updates, 100 Hz control"
 
 if [[ "${TB4_VMWARE_DRY_RUN:-0}" == "1" ]]; then
   printf 'Command:'
