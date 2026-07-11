@@ -26,15 +26,22 @@ Nav2 Goal 操作，证明 Humble 默认 `GridBased` 标识实际动态加载
   独立的 `rplidar.urdf.xacro` 中。
 
   
-## 临时测试环境调整
+## VMware 低负载测试环境
 
 
 标准世界使用 `max_step_size=0.003`，当前 2 核 VM 无法在合理墙钟时间内
-完成导航。测试只在 `/home/ubuntu/tb4-test-runtime/` 创建临时资源，不修改
-仓库或 `/opt/ros/humble`：
+完成导航。仓库提供一键预设，只在用户缓存目录创建临时资源，不修改仓库或
+`/opt/ros/humble`：
 
+```bash
+source /opt/ros/humble/setup.bash
+source experiment2/ros2_ws/install/setup.bash
+ros2 run tb4_experiment_bringup vmware_simulation
+```
 
-1. `warehouse-fast.sdf` 只将：
+预设执行以下调整：
+
+1. 缓存目录中的 `warehouse-low-resource.sdf` 只将：
 
    ```xml
    <max_step_size>0.003</max_step_size>
@@ -58,28 +65,12 @@ Nav2 Goal 操作，证明 Humble 默认 `GridBased` 标识实际动态加载
    OAK-D 链接、关节、碰撞体和 TF 均保留；展开后的标准机器人 URDF 必须仍有
    `rplidar` GPU lidar，且其 `always_on` 为 `true`。
  
-3. 启动前将 overlay 放在 ament 搜索路径首位：
- 
-   ```bash
-   source /opt/ros/humble/setup.bash
-   source /home/ubuntu/repos/robot/experiment2/ros2_ws/install/setup.bash
-   export AMENT_PREFIX_PATH=/home/ubuntu/tb4-test-runtime/overlay:$AMENT_PREFIX_PATH
-   ros2 pkg prefix --share turtlebot4_description
-   ```
- 
-   预期必须为：
- 
-   ```text
-   /home/ubuntu/tb4-test-runtime/overlay/share/turtlebot4_description
-   ```
- 
-4. 启动：
- 
-   ```bash
-   ros2 launch tb4_experiment_bringup simulation.launch.py \
-     world:=warehouse \
-     gz_args:="/home/ubuntu/tb4-test-runtime/warehouse-fast.sdf -r -s -v 2"
-   ```
+3. 将缓存 overlay 放在 ament 搜索路径首位，Gazebo 使用 Mesa 软件渲染并以
+   server-only 模式启动；作用域外的 RViz 继续使用 VMware 3D 加速。
+
+4. 启动检查器在 180 秒墙钟超时内验证 `/clock` 至少推进三次，且 `/scan`
+   包含大于 `range_min + 0.05 m` 的有限环境返回。SLAM 模式默认关闭 Nav2
+   规划和控制服务器，导航模式保持启用。
  
 此调整仍保留 warehouse/`shelf_7` 碰撞体、TurtleBot4 几何、轮式动力学、
 里程计、TF、RPLIDAR、AMCL、全局/局部代价地图、Planner Server、DWB

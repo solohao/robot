@@ -89,6 +89,60 @@ source /opt/ros/humble/setup.bash
 ros2 run nav2_map_server map_saver_cli -f lab_map
 ```
 
+## VMware 低负载一键预设
+
+VMware Workstation 的 `SVGA3D + OGRE2` 组合可能使 Ignition
+`gpu_lidar` 的每束距离都错误地等于最小量程 `0.164 m`。不要用这种扫描继续
+建图；生成的地图通常只有机器人附近几格。例如 `8 × 23` 的地图不能用于后续
+AMCL 或 Nav2。
+
+完成工作空间编译并加载 `install/setup.bash` 后，使用一键预设启动建图：
+
+```bash
+ros2 run tb4_experiment_bringup vmware_simulation slam:=true
+```
+
+该命令会在 `~/.cache/tb4_experiment_bringup/vmware/` 自动创建用户级临时
+overlay，不修改仓库或 `/opt/ros`，并执行以下低负载设置：
+
+- Gazebo server-only，使用 Mesa 软件渲染保证 GPU lidar 数据正确；
+- RViz 不继承软件渲染变量，继续使用 VMware 3D 加速；
+- warehouse `max_step_size` 设为 `0.1`；
+- OAK-D 停用，RPLIDAR 保持启用并降为 `10 Hz`；
+- 关闭 RPLIDAR 射线可视化；
+- SLAM 模式默认不启动不需要的 Nav2 规划和控制服务器；
+- 启动后自动检查 `/clock` 和 `/scan`，有效扫描必须包含大于最小量程的环境返回。
+
+验证成功时启动终端会显示：
+
+```text
+VMware preset validated: /clock is active and /scan contains environment returns ...
+```
+
+需要手动复核时，在独立终端依次运行以下命令；每条看到 `average rate` 后按
+`Ctrl+C`：
+
+```bash
+ros2 topic hz /clock
+ros2 topic hz /odom
+ros2 topic hz /scan
+```
+
+SLAM 证据只需展示地图随有效扫描增量扩展，不要求完整探索 warehouse。应覆盖
+起点、目标和二者之间的通道特征，再保存用于定位的地图。
+
+保存地图后，用同一预设启动 AMCL、A* 和 Nav2：
+
+```bash
+ros2 run tb4_experiment_bringup vmware_simulation \
+  map:=$HOME/robot/experiment2/maps/lab_map.yaml
+```
+
+如果只验证建图而不需要 RViz，可额外传入 `start_rviz:=false`。若需在 SLAM
+期间同时启动 Nav2，可显式传入 `start_nav2:=true`。软件渲染下仿真可能慢于
+现实时间，但只要 `/clock` 持续推进，就不会改变使用仿真时间的 SLAM/Nav2
+算法逻辑。
+
 ## 实机运行
 
 现场电脑需要 Ubuntu 22.04、ROS 2 Humble、`turtlebot4_desktop` 和本工作空间。
