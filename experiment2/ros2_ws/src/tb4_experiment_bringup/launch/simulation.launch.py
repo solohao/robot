@@ -34,6 +34,7 @@ def generate_launch_description():
 
     world = LaunchConfiguration('world')
     model = LaunchConfiguration('model')
+    namespace = LaunchConfiguration('namespace')
     gz_args = LaunchConfiguration('gz_args')
     slam = LaunchConfiguration('slam')
     map_file = LaunchConfiguration('map')
@@ -59,6 +60,7 @@ def generate_launch_description():
                 launch_arguments={
                     'world': world,
                     'model': model,
+                    'namespace': namespace,
                     'rviz': 'false',
                     'gz_args': gz_args,
                     'localization': 'false',
@@ -152,6 +154,11 @@ def generate_launch_description():
                 'model',
                 default_value='standard',
                 choices=['standard', 'lite'],
+            ),
+            DeclareLaunchArgument(
+                'namespace',
+                default_value='',
+                description='Robot namespace retained for delayed controllers.',
             ),
             DeclareLaunchArgument(
                 'gz_args',
