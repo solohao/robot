@@ -24,10 +24,19 @@ from rosgraph_msgs.msg import Clock
 from sensor_msgs.msg import LaserScan
 
 
+VALIDATION_TIMEOUT_SECONDS = 180.0
+STABILITY_DURATION_SECONDS = 120.0
+MAX_CLOCK_GAP_SECONDS = 15.0
+
+
 class SimulationValidator(Node):
     def __init__(self) -> None:
         super().__init__('vmware_simulation_validator')
         self.clock_messages = 0
+        self.clock_advances = 0
+        self.first_clock_wall_time: float | None = None
+        self.last_clock_advance_wall_time: float | None = None
+        self.last_clock_stamp: int | None = None
         self.scan: LaserScan | None = None
         self.create_subscription(
             Clock,
@@ -42,11 +51,41 @@ class SimulationValidator(Node):
             qos_profile_sensor_data,
         )
 
-    def receive_clock(self, _: Clock) -> None:
+    def receive_clock(self, clock: Clock) -> None:
+        wall_time = time.monotonic()
+        stamp = clock.clock.sec * 1_000_000_000 + clock.clock.nanosec
         self.clock_messages += 1
+        if self.first_clock_wall_time is None:
+            self.first_clock_wall_time = wall_time
+        if self.last_clock_stamp is None or stamp > self.last_clock_stamp:
+            if self.last_clock_stamp is not None:
+                self.clock_advances += 1
+            self.last_clock_stamp = stamp
+            self.last_clock_advance_wall_time = wall_time
 
     def receive_scan(self, scan: LaserScan) -> None:
         self.scan = scan
+
+    def clock_has_stalled(self, wall_time: float) -> bool:
+        if self.last_clock_advance_wall_time is None:
+            return False
+        return (
+            wall_time - self.last_clock_advance_wall_time
+            > MAX_CLOCK_GAP_SECONDS
+        )
+
+    def clock_is_stable(self, wall_time: float) -> bool:
+        if (
+            self.first_clock_wall_time is None
+            or self.last_clock_advance_wall_time is None
+        ):
+            return False
+        return (
+            self.clock_advances >= 3
+            and wall_time - self.first_clock_wall_time
+            >= STABILITY_DURATION_SECONDS
+            and not self.clock_has_stalled(wall_time)
+        )
 
     def scan_is_valid(self) -> bool:
         if self.scan is None:
@@ -85,7 +124,8 @@ class SimulationValidator(Node):
         if not finite_ranges:
             return
         self.get_logger().info(
-            'VMware preset validated: /clock is active and /scan contains '
+            'VMware preset validated: /clock advanced for 120 wall seconds '
+            'and /scan contains '
             f'environment returns from {min(finite_ranges):.3f} m to '
             f'{max(finite_ranges):.3f} m.'
         )
@@ -94,17 +134,26 @@ class SimulationValidator(Node):
 def main() -> None:
     rclpy.init()
     validator = SimulationValidator()
-    deadline = time.monotonic() + 180.0
+    deadline = time.monotonic() + VALIDATION_TIMEOUT_SECONDS
 
     while time.monotonic() < deadline:
         rclpy.spin_once(validator, timeout_sec=1.0)
-        if validator.clock_messages >= 3 and validator.scan_is_valid():
+        wall_time = time.monotonic()
+        if validator.clock_has_stalled(wall_time):
+            validator.get_logger().error(
+                'VMware preset validation failed: /clock stopped advancing '
+                f'for more than {MAX_CLOCK_GAP_SECONDS:.0f} wall seconds.'
+            )
+            validator.destroy_node()
+            rclpy.shutdown()
+            raise SystemExit(1)
+        if validator.clock_is_stable(wall_time) and validator.scan_is_valid():
             validator.report_scan()
             validator.destroy_node()
             rclpy.shutdown()
             return
 
-    if validator.clock_messages == 0:
+    if validator.clock_messages == 0 or validator.clock_advances == 0:
         validator.get_logger().error(
             'VMware preset validation failed: /clock did not advance.'
         )

@@ -135,17 +135,17 @@ ros2 run tb4_experiment_bringup vmware_simulation slam:=true
 4. warehouse `max_step_size: 0.003 -> 0.1`；
 5. OAK-D `always_on=0`、`update_rate=1`、关闭可视化；
 6. RPLIDAR 保持启用，降为 10 Hz，关闭射线可视化；
-7. Create 3 cliff/IR 辅助 GPU lidar 从 62 Hz 降为 1 Hz；
+7. 关闭 Create 3 cliff/IR 辅助 GPU lidar 及其 ROS 桥接；
 8. Gazebo 使用 server-only；
 9. 仅 Gazebo 进程使用 `LIBGL_ALWAYS_SOFTWARE=1`；
 10. RViz 不继承软件渲染变量，继续使用 VMware SVGA3D；
 11. `slam:=true` 时默认不启动不需要的 Nav2 服务器；
-12. 自动验证 `/clock` 和 `/scan`。
+12. 自动观察 `/clock` 120 秒并验证 `/scan`；时钟连续 15 秒不推进即失败。
 
 验证通过日志类似：
 
 ```text
-VMware preset validated: /clock is active and /scan contains environment returns ...
+VMware preset validated: /clock advanced for 120 wall seconds and /scan contains ...
 ```
 
 ## 8. 当前现场状态
@@ -229,11 +229,12 @@ x: 0.06213
 y: -0.01394
 ```
 
-说明降载版本中底盘运动链路有效。用户虚拟机尚未拉取并复测该最新 PR。
+说明 PR #21 降载版本在开发环境中底盘运动链路有效；用户后来在本地复测时仍发生
+长时间运行后停钟，详见“当前成功标准”。
 
-## 9. 下一步：更新最新降载 PR 并复测
+## 9. 下一步：更新严格降载修复并复测
 
-新会话应先确认 PR #21 已合并，然后让用户在没有旧
+新会话应先确认包含严格降载修复的 PR 已合并，然后让用户在没有旧
 Gazebo/ROS 进程的情况下执行：
 
 ```bash
@@ -249,7 +250,7 @@ ros2 run tb4_experiment_bringup vmware_simulation slam:=true
 启动输出应额外包含：
 
 ```text
-Create 3 cliff/IR sensors: 1 Hz
+Create 3 cliff/IR GPU lidar: disabled
 ```
 
 等待自动验证通过后，先观察 `/clock` 至少 2–3 分钟，再进行遥控：
@@ -526,7 +527,12 @@ The path '/home/liujunhao/tb4-test-runtime/overlay' ... doesn't contain any
 
 - PR #19/#20 的一键入口与 controller 修复已合并；
 - 用户机器曾在持续运行时再次发生 `/clock` 停止；
-- PR #21 已将 Create 3 cliff/IR GPU lidar 从 62 Hz 降为 1 Hz；
-- 开发环境已验证持续 `/clock`、有效 `/scan` 和 `/odom` 位移；
-- 下一步应合并最新 PR，让用户拉取后复测 2–3 分钟时钟和短程遥控运动；
+- PR #21 将 Create 3 cliff/IR GPU lidar 从 62 Hz 降为 1 Hz，开发环境曾验证
+  持续 `/clock`、有效 `/scan` 和 `/odom` 位移；
+- 用户本地拉取 PR #21 后仍在遥控阶段停钟：`/clock` 15 秒无消息，
+  teleop 到 `motion_control` 的 `/cmd_vel` 发布订阅链存在，TF 时间停在约
+  `1124.1 s`，说明问题仍是 Gazebo 负载而不是键盘或 A*；
+- 严格降载修复进一步关闭 11 个 cliff/IR GPU lidar 及其 ROS 桥接，只保留实验
+  所需的 RPLIDAR、里程计、TF 和底盘控制；
+- 下一步应让用户拉取严格降载修复，复测 2–3 分钟时钟和短程遥控运动；
 - 之后再保存地图、切换 AMCL/A*/Nav2，并验证绕过 `shelf_7` 到达目标。

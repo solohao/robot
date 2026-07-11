@@ -109,15 +109,16 @@ overlay，不修改仓库或 `/opt/ros`，并执行以下低负载设置：
 - RViz 不继承软件渲染变量，继续使用 VMware 3D 加速；
 - warehouse `max_step_size` 设为 `0.1`；
 - OAK-D 停用，RPLIDAR 保持启用并降为 `10 Hz`；
-- Create 3 的 cliff/IR 辅助射线传感器降为 `1 Hz`，避免软件渲染长时间停滞；
+- 禁用导航不依赖的 Create 3 cliff/IR GPU lidar 及其 ROS 桥接，保留传感器几何；
 - 关闭 RPLIDAR 射线可视化；
 - SLAM 模式默认不启动不需要的 Nav2 规划和控制服务器；
-- 启动后自动检查 `/clock` 和 `/scan`，有效扫描必须包含大于最小量程的环境返回。
+- 启动后自动观察 `/clock` 120 秒并检查 `/scan`；时钟连续 15 秒不推进即失败，
+  有效扫描必须包含大于最小量程的环境返回。
 
 验证成功时启动终端会显示：
 
 ```text
-VMware preset validated: /clock is active and /scan contains environment returns ...
+VMware preset validated: /clock advanced for 120 wall seconds and /scan contains ...
 ```
 
 需要手动复核时，在独立终端依次运行以下命令；每条看到 `average rate` 后按
