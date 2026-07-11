@@ -110,8 +110,11 @@ VMware 可在 Windows 主机侧使用 RTX 4060，但 Ubuntu guest 通常仍显�
   https://github.com/solohao/robot/pull/19
 - PR #20：修复 VMware 预设底盘控制器延迟启动
   https://github.com/solohao/robot/pull/20
+- PR #21：降低 VMware 仿真 Create 3 传感器负载并提交会话交接文档
+  https://github.com/solohao/robot/pull/21
 
-PR #19 和 #20 均已合并到 `devin/1783302960-experiment1`。
+PR #19 和 #20 均已合并到 `devin/1783302960-experiment1`；PR #21 是当前
+待合并的持续运行修复。
 
 ## 7. 一键 VMware 预设的行为
 
@@ -199,7 +202,7 @@ TF_OLD_DATA ignoring data from the past
 4 组 cliff 和 7 组 IR intensity `gpu_lidar`，默认均约 62 Hz；在 VMware
 llvmpipe 中持续计算会造成额外负载。
 
-当前待合并 PR 已扩展 `vmware_simulation`：
+PR #21 已扩展 `vmware_simulation`：
 
 - 同时复制并覆盖 `irobot_create_description`；
 - 将 Create 3 cliff/IR GPU lidar 从 62 Hz 降为 1 Hz；
@@ -230,7 +233,7 @@ y: -0.01394
 
 ## 9. 下一步：更新最新降载 PR 并复测
 
-新会话应先确认降低 Create 3 cliff/IR 频率的 PR 已合并，然后让用户在没有旧
+新会话应先确认 PR #21 已合并，然后让用户在没有旧
 Gazebo/ROS 进程的情况下执行：
 
 ```bash
@@ -523,7 +526,7 @@ The path '/home/liujunhao/tb4-test-runtime/overlay' ... doesn't contain any
 
 - PR #19/#20 的一键入口与 controller 修复已合并；
 - 用户机器曾在持续运行时再次发生 `/clock` 停止；
-- 新降载修改已将 Create 3 cliff/IR GPU lidar 从 62 Hz 降为 1 Hz；
+- PR #21 已将 Create 3 cliff/IR GPU lidar 从 62 Hz 降为 1 Hz；
 - 开发环境已验证持续 `/clock`、有效 `/scan` 和 `/odom` 位移；
 - 下一步应合并最新 PR，让用户拉取后复测 2–3 分钟时钟和短程遥控运动；
 - 之后再保存地图、切换 AMCL/A*/Nav2，并验证绕过 `shelf_7` 到达目标。
