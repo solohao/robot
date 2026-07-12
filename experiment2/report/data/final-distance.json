@@ -1,20 +1,11 @@
 {
-  "map_to_odom": {
-    "x": 1.0030074242971516,
-    "y": -0.14965384972102627,
-    "yaw": -0.05649786251373551
-  },
-  "odom_to_base_link": {
-    "x": -1.0033643485876305,
-    "y": -3.629107415806186
-  },
-  "base_link_map": {
-    "x": -0.20368372582318273,
-    "y": -3.7163129474898886
-  },
   "goal": {
-    "x": -0.14857175946235657,
-    "y": -3.923801898956299
+    "x": -0.149,
+    "y": -3.924
   },
-  "distance_to_goal": 0.21468347355301284
+  "exact_final_pose_recorded": false,
+  "configured_xy_goal_tolerance": 0.25,
+  "terminal_status": 4,
+  "terminal_status_label": "SUCCEEDED",
+  "interpretation": "本次录屏未同步保存终态 TF 数值，因此不虚构精确距离；SUCCEEDED 证明 Nav2 目标检查器已在 0.25 m 位置容差内通过。"
 }

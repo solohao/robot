@@ -8,7 +8,11 @@
 - `reference.docx`：Word 中文字体、标题、页边距、页眉与页码样式；
 - `generate_figures.py`：根据客观 JSON 数据生成系统架构、SLAM 指标和 A* 路径图；
 - `make_reference_docx.py`、`polish_docx.py`：生成并完善 Word 样式、目录和图表编号；
-- `data/`：SLAM、路径、Nav2 action、最终位姿与 `/clock` 客观数据；
+- `data/astar-plan.yaml`：最终运行保存的完整 ROS 2 `/plan` 原始消息；
+- `data/path.json`：由原始 189 个位姿计算的路径和绕障摘要；
+- `data/action.json`、`data/final-distance.json`：目标 UUID、终态和目标容差证据；
+- `data/navigation-clock.json`：120 秒 `/clock` 与有效 `/scan` 启动验证摘要；
+- `data/slam-*.json`：独立 SLAM 增量建图流程数据；
 - `figures/`：RViz 截图及报告图表。
 
 生成命令：
@@ -18,4 +22,5 @@ sudo apt install pandoc texlive-xetex texlive-lang-chinese python3-docx
 make all
 ```
 
-Word 报告包含静态页码目录，适合直接编辑和提交。
+Word 报告包含静态页码目录，适合直接编辑和提交。封面个人信息仍为占位符，提交前
+必须填写；正文变化后需同步更新目录页码。

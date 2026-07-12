@@ -1,16 +1,10 @@
 {
-  "status": "stalled",
-  "wall_duration": 303.22238489000006,
-  "sample_count": 627,
-  "max_wall_gap": 4.941866054000002,
-  "first": {
-    "wall": 203.00780456,
-    "sec": 11,
-    "nanosec": 500000000
-  },
-  "last": {
-    "wall": 494.62354337,
-    "sec": 74,
-    "nanosec": 100000000
-  }
+  "result": "passed",
+  "validation_wall_seconds": 120,
+  "watchdog_enabled_after_validation": true,
+  "watchdog_stall_threshold_wall_seconds": 15,
+  "scan_environment_return_min": 1.339,
+  "scan_environment_return_max": 11.997,
+  "evidence": "vmware_simulation_validator 启动日志",
+  "note": "导航录屏中 RViz 曾短暂灰显后自行恢复；动作最终 SUCCEEDED，未把该显示现象误记为持续停钟。"
 }
