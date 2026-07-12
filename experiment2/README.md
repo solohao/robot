@@ -136,20 +136,33 @@ ros2 topic hz /odom
 ros2 topic hz /scan
 ```
 
-SLAM 证据只需展示地图随有效扫描增量扩展，不要求完整探索 warehouse。应覆盖
-起点、目标和二者之间的通道特征，再保存用于定位的地图。
+SLAM 证据只需展示地图随有效扫描增量扩展，不要求完整探索 warehouse。保存的
+`lab_map` 用于证明建图与地图持久化；A* 端到端验证独立使用与 warehouse 世界匹配的
+官方静态地图，避免把未完整探索的局部地图当作全局导航地图。
 
-保存地图后，用同一预设启动 AMCL、A* 和 Nav2：
+最终 VMware 复现采用分阶段启动。先启动 Gazebo、AMCL 和 RViz，不让 Nav2 在
+`map -> odom` 建立前激活：
 
 ```bash
-ros2 run tb4_experiment_bringup vmware_simulation \
-  map:=$HOME/robot/experiment2/maps/lab_map.yaml
+ros2 run tb4_experiment_bringup vmware_simulation start_nav2:=false
 ```
 
-如果只验证建图而不需要 RViz，可额外传入 `start_rviz:=false`。若需在 SLAM
-期间同时启动 Nav2，可显式传入 `start_nav2:=true`。软件渲染下仿真可能慢于
-现实时间，但只要 `/clock` 持续推进，就不会改变使用仿真时间的 SLAM/Nav2
-算法逻辑。
+在 RViz 使用 `2D Pose Estimate` 后，以
+`timeout 10s ros2 run tf2_ros tf2_echo map odom` 确认定位 TF 持续输出。再在
+第二个终端启动 Nav2：
+
+```bash
+source /opt/ros/humble/setup.bash
+source experiment2/ros2_ws/install/setup.bash
+PARAMS="$(ros2 pkg prefix tb4_experiment_bringup)/share/tb4_experiment_bringup/config/nav2_astar.yaml"
+ros2 launch turtlebot4_navigation nav2.launch.py \
+  use_sim_time:=true params_file:="$PARAMS"
+```
+
+Planner、Controller 与 BT Navigator 均为 `active [3]` 后再发送唯一目标。如果只
+验证建图而不需要 RViz，可传入 `start_rviz:=false`。若需在 SLAM 期间同时启动
+Nav2，可显式传入 `start_nav2:=true`。软件渲染下仿真可能慢于现实时间，但只要
+`/clock` 持续推进，就不会改变使用仿真时间的 SLAM/Nav2 算法逻辑。
 
 ## 实机运行
 
@@ -179,12 +192,13 @@ ros2 launch tb4_experiment_bringup real_robot.launch.py slam:=true
 
 1. SLAM Toolbox 增量建图：机器人移动 `0.550 m`，已知栅格增加 `4,858`，
    保存地图分辨率为 `0.05 m/cell`。
-2. AMCL + 自定义 A* + Nav2 导航：路径包含 `189` 个位姿，绕过 `shelf_7`；
-   同一目标 UUID 从 `EXECUTING (2)` 进入 `SUCCEEDED (4)`，最终距目标
-   `0.215 m`。
+2. AMCL + 自定义 A* + Nav2 导航：路径包含 `189` 个位姿、长度 `6.872 m`，
+   最大横向绕行 `2.425 m`，`shelf_7` 禁止带违规点为 `0`；同一目标 UUID
+   从 accepted 进入 `SUCCEEDED (4)`，Nav2 的 `0.25 m` 位置容差检查通过。
 
-低配测试主机的导航流程出现过一次超过 10 秒的 `/clock` 监听间隙，随后时钟恢复并
-完成导航。完整实验条件、低负载配置、客观数据和限制说明见
+最终导航运行通过了 120 秒 `/clock` 与有效 `/scan` 启动验证。RViz 在 VMware
+软件渲染负载下曾短暂灰显后恢复，完整约 302 秒录屏保留了目标发送、A* 路径、
+机器人运动和终态 `SUCCEEDED`。完整实验条件、客观数据和限制说明见
 [`report/实验二-TurtleBot4自主导航仿真-实验报告.pdf`](report/实验二-TurtleBot4自主导航仿真-实验报告.pdf)。
 
 ## 重新生成报告

@@ -21,10 +21,10 @@ FIGURE_CAPTIONS = [
     "SLAM 建图运动后的增量地图",
     "增量建图客观指标",
     "SLAM 流程保存的占据栅格地图",
-    "通过 RViz 设定初始位姿后的 AMCL 收敛状态",
+    "最终复现实验的 AMCL 初始定位与导航激活界面",
     "A* 全局路径与 shelf_7 绕障判定",
-    "RViz 中的 A* 路径与导航执行状态",
-    "Nav2 到达目标：Feedback 为 reached，剩余距离为 0.00 m",
+    "完整导航录屏中的 A* 全局路径与执行状态",
+    "自主导航终态：NavigateToPose action 返回 SUCCEEDED",
 ]
 
 TABLE_CAPTIONS = [
@@ -48,7 +48,11 @@ TABLE_DATA = [
             ["建图与定位", "SLAM Toolbox；Nav2 Map Server；AMCL"],
             ["导航框架", "Nav2 BT Navigator、Planner Server、DWB Controller、Velocity Smoother"],
             ["全局规划算法", "自研 tb4_astar_planner/AStarPlanner pluginlib 插件"],
-            ["测试主机", "约 2 vCPU、7.8 GiB 内存、无独立 GPU，OpenGL 使用 llvmpipe"],
+            [
+                "测试主机",
+                "约 6 vCPU、7.7 GiB 内存、无独立 GPU；RViz 使用 VMware SVGA3D，"
+                "Gazebo 使用 Mesa llvmpipe",
+            ],
         ],
     ),
     (
@@ -110,9 +114,9 @@ TABLE_DATA = [
         [
             ["指标", "实测值", "判定"],
             ["路径位姿数量", "189", "通过"],
-            ["起点", "(-0.005, -0.068) m", "靠近机器人"],
+            ["起点", "(0.000, 0.000) m", "与机器人初始位姿一致"],
             ["终点", "(-0.149, -3.924) m", "与目标一致"],
-            ["路径长度", "6.838 m", "—"],
+            ["路径长度", "6.872 m", "—"],
             ["最大横向绕行", "2.425 m", "通过（阈值 2.0 m）"],
             ["shelf 占用带违规点", "0", "通过"],
             ["/plan 发布者", "planner_server 唯一发布", "通过"],
@@ -126,9 +130,9 @@ TABLE_DATA = [
             ["AMCL 自定位", "map frame，TF 有效", "通过"],
             ["自定义全局规划器加载", "tb4_astar_planner/AStarPlanner", "通过"],
             ["货架绕障", "0 个 shelf 带违规点", "通过"],
-            ["Nav2 动作终态", "同一 UUID：2 → 4", "通过"],
-            ["最终目标距离", "0.215 m", "通过"],
-            ["仿真时钟严格连续性", "出现一次 >10 s 监听间隙，随后恢复", "性能项未通过"],
+            ["Nav2 动作终态", "同一 UUID：accepted → SUCCEEDED (4)", "通过"],
+            ["目标位置容差", "0.25 m goal checker 已通过", "通过"],
+            ["/clock 与 /scan 启动验证", "连续观察 120 s，watchdog 已启用", "通过"],
         ],
     ),
 ]
@@ -209,7 +213,7 @@ def style_cover(document):
             paragraph.paragraph_format.space_after = Pt(6)
             for run in paragraph.runs:
                 set_run_font(run, "宋体", 12)
-        elif text == "2026 年 7 月 11 日":
+        elif text == "2026 年 7 月 12 日":
             paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
             paragraph.paragraph_format.first_line_indent = Cm(0)
             for run in paragraph.runs:
@@ -291,32 +295,33 @@ def insert_contents_page(document):
         (1, "3  自主导航系统设计", 6),
         (2, "3.1  总体架构", 6),
         (2, "3.2  SLAM Toolbox 增量建图", 6),
-        (2, "3.3  AMCL 自定位", 7),
+        (2, "3.3  AMCL 自定位", 6),
         (2, "3.4  代价感知 A* 全局路径规划", 7),
         (2, "3.5  Nav2 闭环执行", 7),
-        (1, "4  软件实现", 8),
-        (2, "4.1  代码包结构", 8),
+        (1, "4  软件实现", 7),
+        (2, "4.1  代码包结构", 7),
         (2, "4.2  仿真启动模式", 8),
         (2, "4.3  关键导航参数", 8),
-        (1, "5  实验步骤", 9),
-        (2, "5.1  编译与静态验证", 9),
-        (2, "5.2  SLAM 增量建图", 9),
+        (1, "5  实验步骤", 8),
+        (2, "5.1  编译与静态验证", 8),
+        (2, "5.2  SLAM 增量建图", 8),
         (2, "5.3  AMCL 初始化与规划器检查", 9),
-        (2, "5.4  发送导航目标", 10),
+        (2, "5.4  发送导航目标", 9),
         (1, "6  实验结果与分析", 10),
         (2, "6.1  SLAM 增量建图结果", 10),
         (2, "6.2  AMCL 自定位结果", 12),
         (2, "6.3  A* 路径与绕障结果", 13),
-        (2, "6.4  Nav2 导航终态", 16),
-        (2, "6.5  仿真时钟与低负载配置分析", 17),
+        (2, "6.4  Nav2 导航终态", 15),
+        (2, "6.5  仿真时钟与低负载配置分析", 16),
         (1, "7  问题诊断与改进", 17),
         (2, "7.1  启动参数作用域", 17),
-        (2, "7.2  RViz 视角确定性", 18),
-        (2, "7.3  后续优化方向", 18),
-        (1, "8  结论", 18),
+        (2, "7.2  RViz 视角确定性", 17),
+        (2, "7.3  慢速主机的 lifecycle 启动顺序", 17),
+        (2, "7.4  后续优化方向", 17),
+        (1, "8  结论", 17),
         (1, "9  参考文献", 18),
         (1, "附录 A  仿真复现命令", 19),
-        (1, "附录 B  报告生成方法", 20),
+        (1, "附录 B  报告生成方法", 19),
     ]
     previous = title
     for level, name, page in entries:

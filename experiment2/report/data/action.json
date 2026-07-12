@@ -1,22 +1,12 @@
 {
-  "events": [
-    {
-      "goal_id": "45d5c769a74c6f79bb0953a622d30d3e",
-      "stamp": {
-        "nanosec": 100000000,
-        "sec": 53
-      },
-      "status": 2
-    },
-    {
-      "goal_id": "45d5c769a74c6f79bb0953a622d30d3e",
-      "stamp": {
-        "nanosec": 100000000,
-        "sec": 53
-      },
-      "status": 4
-    }
-  ],
-  "terminal_goal_id": "45d5c769a74c6f79bb0953a622d30d3e",
-  "terminal_status": 4
+  "goal_id": "1b1cbd390ce7452ba50b3797400b59f1",
+  "goal_accepted": true,
+  "terminal_status": 4,
+  "terminal_status_label": "SUCCEEDED",
+  "aborted_observed": false,
+  "evidence": {
+    "video": "../../video/实验二-自主导航.mp4",
+    "terminal_frame": "../figures/navigation_reached.png",
+    "note": "同一条 ros2 action send_goal 命令显示 Goal accepted 和最终 SUCCEEDED。"
+  }
 }

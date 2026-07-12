@@ -88,7 +88,7 @@
   \vspace{0.4cm}
   {\large 实验平台：\underline{\makebox[15em][c]{ROS 2 Humble / TurtleBot4}}\par}
   \vfill
-  {\large 2026 年 7 月 11 日}
+  {\large 2026 年 7 月 12 日}
 \end{titlepage}
 
 \pagenumbering{Roman}
@@ -104,16 +104,16 @@ RPLIDAR 二维激光雷达、里程计与 TF 坐标变换；SLAM 阶段由 SLAM 
 为满足全局路径规划算法的编程要求，本实验按照 \code{nav2\_core::GlobalPlanner}
 接口实现 C++ A* 插件。算法在八连通栅格上采用 octile 启发函数，禁止对角穿角，
 并将代价地图栅格值引入边权，从而优先选择具有安全间隙的可行路径。实测生成的全局
-路径包含 189 个位姿，长度为 6.838 m，最大横向绕行为 2.425 m，路径绕过
-\code{shelf\_7} 占用区域。相同 Nav2 目标 UUID 的动作状态由
-\code{EXECUTING (2)} 转为 \code{SUCCEEDED (4)}，未出现
-\code{ABORTED (6)}，机器人最终距目标 0.215 m。
+路径包含 189 个位姿，长度为 6.872 m，最大横向绕行为 2.425 m，路径绕过
+\code{shelf\_7} 占用区域。相同 Nav2 目标 UUID 的命令先返回
+\code{Goal accepted}，终态为 \code{SUCCEEDED (4)}，未进入
+\code{ABORTED (6)}；该终态同时证明目标检查器满足 0.25 m 位置容差。
 
 SLAM 流程中机器人里程计位移为 0.550 m，已知栅格数由 41,067 增至 45,925，
-增量为 4,858 个栅格，地图分辨率为 0.05 m/cell。受测试主机仅有约 2 个 CPU 核心
-且使用 llvmpipe 软件渲染的限制，导航阶段曾出现一次超过 10 s 的仿真时钟监听间隙；
-时钟随后恢复并继续递增，导航动作最终成功。该现象被作为性能限制保留，不影响
-“在 Ignition Gazebo 中实现 TurtleBot4 自主导航”的功能性结论。
+增量为 4,858 个栅格，地图分辨率为 0.05 m/cell。VMware 测试主机配置约 6 vCPU、
+7.7 GiB 内存且无独立 GPU；最终导航运行通过 120 s 的 \code{/clock} 与
+\code{/scan} 启动验证。录屏中 RViz 曾短暂灰显并自行恢复，动作仍成功结束；该现象
+作为软件渲染下的显示性能限制披露，不影响自主导航的功能性结论。
 
 \noindent\textbf{关键词：}TurtleBot4；ROS 2；Ignition Gazebo；SLAM Toolbox；
 AMCL；Nav2；A*；自主导航
@@ -148,7 +148,7 @@ AMCL；Nav2；A*；自主导航
   \item 调用自定位模块，在地图坐标系下获得机器人位姿；
   \item 编程实现全局路径规划算法，并接入导航系统；
   \item 在 RViz 中设定初始位姿和导航目标，使机器人在仿真环境中自主运动并绕开障碍；
-  \item 采集地图、路径、动作状态和最终位姿等客观证据，分析实验结果。
+  \item 采集地图、路径、动作终态和目标容差等客观证据，分析实验结果。
 \end{enumerate}
 
 \subsection{实验范围说明}
@@ -175,7 +175,8 @@ Discovery Server 不在当前测试环境中，因此不将实机连接或实机
     建图与定位 & SLAM Toolbox；Nav2 Map Server；AMCL\\
     导航框架 & Nav2 BT Navigator、Planner Server、DWB Controller、Velocity Smoother\\
     全局规划算法 & 自研 \code{tb4\_astar\_planner/AStarPlanner} pluginlib 插件\\
-    测试主机 & 约 2 vCPU、7.8 GiB 内存、无独立 GPU，OpenGL 使用 llvmpipe\\
+    测试主机 & 约 6 vCPU、7.7 GiB 内存、无独立 GPU；RViz 使用 VMware SVGA3D，
+      Gazebo 使用 Mesa llvmpipe\\
     \bottomrule
   \end{tabularx}
 \end{table}
@@ -365,9 +366,9 @@ colcon test-result --verbose
 Planner Server lifecycle 状态和 \code{/plan} 发布者，确认路径确由自定义插件生成。
 
 \subsection{SLAM 增量建图}
-启动建图模式：
+在 VMware 环境中使用低负载预设启动建图模式：
 \begin{lstlisting}[language=bash]
-ros2 launch tb4_experiment_bringup simulation.launch.py slam:=true
+ros2 run tb4_experiment_bringup vmware_simulation slam:=true
 \end{lstlisting}
 启动后确认仅存在一个 \code{/slam\_toolbox}，不存在 \code{/amcl}，且
 \code{/map} 的唯一发布者为 SLAM Toolbox。机器人通过
@@ -379,12 +380,22 @@ ros2 run nav2_map_server map_saver_cli \
 \end{lstlisting}
 
 \subsection{AMCL 初始化与规划器检查}
-结束建图流程并完全关闭旧 Gazebo、RViz 与 ROS 2 launch 进程，重新启动导航模式：
+结束建图流程并完全关闭旧 Gazebo、RViz 与 ROS 2 launch 进程。A* 导航验证独立使用
+与 warehouse 世界严格匹配的官方静态地图；前述 \code{lab\_map} 用于证明 SLAM
+增量建图与保存，不把未完整探索的局部地图用于全局导航。为避免慢速虚拟机在 AMCL
+建立 \code{map -> odom} 前激活 Nav2，先只启动 Gazebo、AMCL 与 RViz：
 \begin{lstlisting}[language=bash]
-ros2 launch tb4_experiment_bringup simulation.launch.py slam:=false
+ros2 run tb4_experiment_bringup vmware_simulation start_nav2:=false
 \end{lstlisting}
 在 RViz 中点击 \code{2D Pose Estimate}，设定机器人初始位置和朝向，等待粒子云、
-LaserScan 与静态地图对齐。随后检查：
+LaserScan 与静态地图对齐；确认 \code{map -> odom} 有效后，在第二个终端启动 Nav2：
+\begin{lstlisting}[language=bash]
+PARAMS="$(ros2 pkg prefix tb4_experiment_bringup)/share/\
+tb4_experiment_bringup/config/nav2_astar.yaml"
+ros2 launch turtlebot4_navigation nav2.launch.py \
+  use_sim_time:=true params_file:="$PARAMS"
+\end{lstlisting}
+随后检查：
 \begin{lstlisting}[language=bash]
 ros2 param get /planner_server planner_plugins
 ros2 param get /planner_server GridBased.plugin
@@ -395,17 +406,18 @@ ros2 topic info /plan -v
 \code{active [3]}，\code{/plan} 唯一发布者为 \code{planner\_server}。
 
 \subsection{发送导航目标}
-在 RViz 中使用 \code{Nav2 Goal} 将目标设置为约
-$(-0.149,-3.924)$ m，并持续记录 \code{/plan} 与
-\code{/navigate\_to\_pose/\_action/status}。验收条件包括：
+保持 RViz 显示地图和路径，在终端后台记录完整 \code{/plan}，再使用
+\code{ros2 action send\_goal} 将目标精确设置为
+$(-0.149,-3.924)$ m。该方式与 RViz \code{Nav2 Goal} 调用同一 action 接口，
+并可在完整录屏中同时保留终端终态和 RViz 路径。验收条件包括：
 \begin{enumerate}
   \item 路径不少于 3 个位姿，首末点分别靠近机器人和目标；
   \item 对 $y\in[-2.3,-1.7]$ 的路径点，均位于
         $x\in[-1.9,1.7]$ 的 shelf 占用带之外；
   \item 最大横向坐标绝对值不小于 2.0 m；
-  \item 同一 UUID 经历 \code{EXECUTING (2)} 并进入
+  \item 同一条 action 命令先显示 \code{Goal accepted}，最终进入
         \code{SUCCEEDED (4)}，不得进入 \code{ABORTED (6)}；
-  \item 最终机器人至目标距离不大于 0.35 m。
+  \item Nav2 目标检查器在配置的 0.25 m 位置容差内通过。
 \end{enumerate}
 
 \section{实验结果与分析}
@@ -469,15 +481,14 @@ RViz 状态。初始局部地图已显示机器人附近货架边界；运动后
 \end{figure}
 
 \subsection{AMCL 自定位结果}
-图 6 中 Navigation 与 Localization 均处于 active 状态，粒子云集中于
-机器人附近，激光点与 warehouse 静态地图边缘对齐。采集的 \code{/amcl\_pose}
-消息 frame 为 \code{map}，且 \code{map -> odom -> base\_link} TF 链有效，
-满足全局规划的坐标基础。
+图 6 为本次最终复现实验的初始导航界面，Navigation 与 Localization 均处于
+active 状态，机器人初始位姿和 warehouse 静态地图清晰可见。终端采样确认
+\code{map -> odom -> base\_link} TF 链持续有效，满足全局规划的坐标基础。
 
 \begin{figure}[H]
   \centering
   \includegraphics[width=0.86\textwidth]{amcl_localized.png}
-  \caption{通过 RViz 设定初始位姿后的 AMCL 收敛状态}
+  \caption{最终复现实验的 AMCL 初始定位与导航激活界面}
   \label{fig:amcl}
 \end{figure}
 
@@ -496,7 +507,7 @@ $y\in[-2.3,-1.7]$ 范围内，路径点均位于 \code{shelf\_7} 判定带之外
 \begin{figure}[H]
   \centering
   \includegraphics[width=0.86\textwidth]{astar_navigation.png}
-  \caption{RViz 中的 A* 路径与导航执行状态}
+  \caption{完整导航录屏中的 A* 全局路径与执行状态}
   \label{fig:astar-rviz}
 \end{figure}
 
@@ -509,9 +520,9 @@ $y\in[-2.3,-1.7]$ 范围内，路径点均位于 \code{shelf\_7} 判定带之外
     指标 & 实测值 & 判定\\
     \midrule
     路径位姿数量 & 189 & 通过\\
-    起点 & $(-0.005,-0.068)$ m & 靠近机器人\\
+    起点 & $(0.000,0.000)$ m & 与机器人初始位姿一致\\
     终点 & $(-0.149,-3.924)$ m & 与目标一致\\
-    路径长度 & 6.838 m & ---\\
+    路径长度 & 6.872 m & ---\\
     最大横向绕行 & 2.425 m & 通过（阈值 2.0 m）\\
     shelf 占用带违规点 & 0 & 通过\\
     \code{/plan} 发布者 & \code{planner\_server} 唯一发布 & 通过\\
@@ -520,17 +531,16 @@ $y\in[-2.3,-1.7]$ 范围内，路径点均位于 \code{shelf\_7} 判定带之外
 \end{table}
 
 \subsection{Nav2 导航终态}
-目标 UUID 缩写为 \code{45d5...0d3e}，完整值保存在提交包的 action 数据文件中。
-监听到的状态序列为 \code{EXECUTING (2)} $\rightarrow$ \code{SUCCEEDED (4)}，
-相同 UUID 未出现 \code{ABORTED (6)}。最终机器人位置为
-$(-0.204,-3.716)$ m，目标位置为 $(-0.149,-3.924)$ m；按平面欧氏距离计算，
-二者相距 0.215 m，
-小于 0.35 m 验收阈值，也小于 Nav2 配置的 0.25 m 位置容差。
+目标 UUID 缩写为 \code{1b1c...59f1}，完整值保存在提交包的 action 数据文件中。
+同一条 \code{ros2 action send\_goal} 命令先显示 \code{Goal accepted}，随后返回
+\code{Goal finished with status: SUCCEEDED}，对应终态码 4，未进入
+\code{ABORTED (6)}。本次录屏没有同步保存终态 TF 数值，因此报告不沿用其他运行的
+精确距离；\code{SUCCEEDED} 证明 Nav2 目标检查器已在配置的 0.25 m 位置容差内通过。
 
 \begin{figure}[H]
   \centering
   \includegraphics[width=0.86\textwidth]{navigation_reached.png}
-  \caption{Nav2 到达目标：Feedback 为 reached，剩余距离为 0.00 m}
+  \caption{自主导航终态：NavigateToPose action 返回 SUCCEEDED}
   \label{fig:reached}
 \end{figure}
 
@@ -546,28 +556,36 @@ $(-0.204,-3.716)$ m，目标位置为 $(-0.149,-3.924)$ m；按平面欧氏距�
     AMCL 自定位 & \code{map} frame，TF 有效 & 通过\\
     自定义全局规划器加载 & \scriptsize\code{tb4\_astar\_planner/AStarPlanner} & 通过\\
     货架绕障 & 0 个 shelf 带违规点 & 通过\\
-    Nav2 动作终态 & 同一 UUID：2 $\rightarrow$ 4 & 通过\\
-    最终目标距离 & 0.215 m & 通过\\
-    仿真时钟严格连续性 & 出现一次 $>10$ s 监听间隙，随后恢复 & 性能项未通过\\
+    Nav2 动作终态 & 同一 UUID：accepted $\rightarrow$ SUCCEEDED (4) & 通过\\
+    目标位置容差 & 0.25 m goal checker 已通过 & 通过\\
+    \code{/clock} 与 \code{/scan} 启动验证 & 连续观察 120 s，watchdog 已启用 & 通过\\
     \bottomrule
   \end{tabularx}
 \end{table}
 
 \subsection{仿真时钟与低负载配置分析}
 SLAM 流程的时钟监视器在 240.4 s 墙钟内接收 427 个样本，仿真时间从 32.5 s 增至
-75.1 s，状态为 \code{ok}。导航流程在 303.2 s 墙钟内接收 627 个样本，监视器最后
-记录到 74.1 s，并因连续超过 10 s 未收到回调而标记为 \code{stalled}；之后独立采样
-得到 103.2 s，证明 Gazebo 时钟恢复而非永久停止，机器人也继续运动直至 action 成功。
+75.1 s，状态为 \code{ok}。最终导航复现实验由
+\code{vmware\_simulation\_validator} 连续观察 120 s 墙钟，确认 \code{/clock}
+推进，且 \code{/scan} 含 1.339--11.997 m 的环境回波；通过后 15 s 停钟 watchdog
+继续运行。提交数据只将已保存的 120 s 检查记为严格通过，不以动作成功替代未单独
+保存的全程时钟采样。
 
-10 s 是监控判定阈值，不是 Gazebo 的运行上限，也不会主动造成时钟停顿。本机仅约
-2 vCPU 且无硬件 OpenGL，Gazebo 传感器计算与 RViz costmap、粒子云渲染竞争 CPU，
-导致实时率显著低于 1。为获得可完成的端到端实验，证据采集使用了以下临时低负载配置：
+本机约 6 vCPU、7.7 GiB 内存且无独立 GPU。Gazebo 软件渲染、RPLIDAR、
+AMCL、两套 costmap 与 RViz 同时运行时仍会竞争 CPU 和虚拟 GPU；录屏中 RViz
+曾短暂灰显后自行恢复，路径显示和 action 执行没有中断。为获得可完成的端到端实验，
+证据采集使用了以下低负载配置：
 \begin{itemize}
   \item Gazebo 以 server-only 模式运行，关闭三维客户端但保留物理、传感器和时钟；
-  \item OAK-D 仿真更新关闭，因为本实验的 SLAM/Nav2 使用 RPLIDAR；
+  \item OAK-D 停用；关闭 Create 3 cliff/IR GPU lidar 及其 ROS 桥接，因为导航使用
+        RPLIDAR；
   \item RPLIDAR 更新率由默认高频降至 10 Hz，\code{/scan} 始终保持发布；
-  \item 关闭 Gazebo 射线绘制，以及完成相应证据后关闭部分 RViz 视觉叠层；
-  \item 临时 world 的 \code{max\_step\_size} 设为 0.1 s，以降低物理计算量。
+  \item 不生成充电底座，不启动 TurtleBot4 HMI/传感器 lifecycle，保留 Create 3
+        运动控制、里程计和 TF；
+  \item 临时 world 使用 \code{max\_step\_size=0.01 s}、
+        \code{real\_time\_update\_rate=20 Hz} 与
+        \code{real\_time\_factor=0.2}；
+  \item Create 3 controller 更新率设为 100 Hz，里程计发布率设为 20 Hz。
 \end{itemize}
 上述措施没有关闭 SLAM、AMCL、Planner Server、Controller Server、Velocity Smoother
 或 Nav2 action，因此不改变自主导航的功能性证据；但 \code{max\_step\_size} 和激光
@@ -590,9 +608,16 @@ SLAM/AMCL 模式完全隔离。该修改使“一个地图源、一个定位源�
 \code{X=0}、\code{Y=-1.965}，并预置 \code{SetInitialPose} 和
 \code{GoalTool}。每次启动均恢复相同俯视方向，从而使初始位姿和目标点操作可复现。
 
+\subsection{慢速主机的 lifecycle 启动顺序}
+若 Nav2 抢在 AMCL 初始位姿前激活，Controller Server 可能在等待
+\code{map -> odom} 时停留于 inactive。最终流程使用
+\code{start\_nav2:=false} 先建立定位 TF，再单独启动 Nav2；Planner、Controller
+和 BT Navigator 随后均进入 \code{active [3]}。该分阶段顺序避免把 lifecycle
+阻塞误判为 A* 算法错误。
+
 \subsection{后续优化方向}
 \begin{enumerate}
-  \item 以 lifecycle 状态或进程事件替代固定 5 s 的启动延时，提高慢速主机稳定性；
+  \item 在统一 launch 中以 TF/lifecycle 条件自动执行当前的分阶段 Nav2 启动；
   \item 为 A* 增加起点可通行性、起点等于终点且位于障碍等边界测试；
   \item 在高性能主机上恢复默认物理步长、完整 OAK-D 和默认激光频率，测量规划耗时、
         实时率与资源占用；
@@ -609,14 +634,14 @@ AMCL 在静态地图上完成自定位；自定义代价感知 A* 以 Nav2 plugi
 无碰撞全局路径；DWB、速度平滑器和 Create 3 仿真底盘构成闭环执行系统。
 
 实验的量化结果表明，SLAM 已知区域增加 4,858 个栅格，地图分辨率为 0.05 m/cell；
-A* 路径包含 189 个位姿、长度 6.838 m，并以 2.425 m 的横向绕行避开
-\code{shelf\_7}；Nav2 同一目标 UUID 从 \code{EXECUTING} 进入
-\code{SUCCEEDED}，机器人最终距目标 0.215 m。因此，课程提出的“在 Ignition Gazebo
-仿真环境中实现 TurtleBot4 自主导航”已经完成。
+A* 路径包含 189 个位姿、长度 6.872 m，并以 2.425 m 的横向绕行避开
+\code{shelf\_7}；Nav2 同一目标 UUID 从 accepted 进入
+\code{SUCCEEDED (4)}，目标检查器在 0.25 m 位置容差内通过。因此，课程提出的
+“在 Ignition Gazebo 仿真环境中实现 TurtleBot4 自主导航”已经完成。
 
-测试主机性能不足造成一次超过 10 s 的 \code{/clock} 监听间隙，但时钟随后恢复且
-导航成功结束。该问题说明系统在低配、软件渲染环境下的实时性仍需优化，不否定自主
-导航功能的完成结论。报告对这一限制进行了保守披露，并提供默认配置复测建议。
+最终运行通过 120 s 的时钟和扫描启动验证；VMware 软件渲染下仍出现过可自行恢复的
+RViz 短暂灰显。报告保守地区分了已保存的连续性证据、显示性能现象和动作终态，
+并提供默认配置复测建议。
 
 \clearpage
 \begin{thebibliography}{99}
@@ -666,26 +691,32 @@ S. Macenski, F. Martín, R. White, and J. G. Clavero,
 \begin{lstlisting}[language=bash]
 source /opt/ros/humble/setup.bash
 source experiment2/ros2_ws/install/setup.bash
-ros2 launch tb4_experiment_bringup simulation.launch.py slam:=false
+ros2 run tb4_experiment_bringup vmware_simulation start_nav2:=false
 \end{lstlisting}
-在 RViz 中依次使用 \code{2D Pose Estimate} 和 \code{Nav2 Goal}。
+在 RViz 中使用 \code{2D Pose Estimate}，确认 \code{map -> odom} 后，另开终端：
+\begin{lstlisting}[language=bash]
+source /opt/ros/humble/setup.bash
+source experiment2/ros2_ws/install/setup.bash
+PARAMS="$(ros2 pkg prefix tb4_experiment_bringup)/share/\
+tb4_experiment_bringup/config/nav2_astar.yaml"
+ros2 launch turtlebot4_navigation nav2.launch.py \
+  use_sim_time:=true params_file:="$PARAMS"
+\end{lstlisting}
+Planner、Controller 与 BT Navigator 均为 \code{active [3]} 后，再使用 RViz
+\code{Nav2 Goal} 或 \code{ros2 action send\_goal} 发送唯一目标。
 
 \subsection{建图模式}
 \begin{lstlisting}[language=bash]
 source /opt/ros/humble/setup.bash
 source experiment2/ros2_ws/install/setup.bash
-ros2 launch tb4_experiment_bringup simulation.launch.py slam:=true
+ros2 run tb4_experiment_bringup vmware_simulation slam:=true
 \end{lstlisting}
 
-\subsection{低负载复测模式}
-低配主机可自行复制官方 warehouse SDF 并降低传感器更新率，然后通过
-\code{gz\_args} 指向该临时文件；临时 overlay 不属于课程源码，提交包不将其作为
-默认运行前提。
+\subsection{低负载预设}
+提交代码提供 \code{vmware\_simulation} 脚本；它只在用户缓存目录生成 overlay，
+不修改仓库或 \code{/opt/ros/humble}：
 \begin{lstlisting}[language=bash]
-export AMENT_PREFIX_PATH=/path/to/temporary/overlay:$AMENT_PREFIX_PATH
-ros2 launch tb4_experiment_bringup simulation.launch.py \
-  slam:=false \
-  gz_args:="/absolute/path/to/warehouse-fast.sdf -r -s -v 2"
+ros2 run tb4_experiment_bringup vmware_simulation start_nav2:=false
 \end{lstlisting}
 
 \section{报告生成方法}
