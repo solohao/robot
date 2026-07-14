@@ -88,7 +88,7 @@
   \vspace{0.4cm}
   {\large 实验平台：\underline{\makebox[15em][c]{ROS 2 Humble / TurtleBot4}}\par}
   \vfill
-  {\large 2026 年 7 月 12 日}
+  {\large 2026 年 7 月 14 日}
 \end{titlepage}
 
 \pagenumbering{Roman}
@@ -96,24 +96,22 @@
 \section*{摘\quad 要}
 \addcontentsline{toc}{section}{摘要}
 本实验面向 TurtleBot4 移动机器人，在 Ubuntu 22.04 与 ROS 2 Humble 环境下构建
-Ignition Gazebo 仿真系统，完成增量式环境建图、基于静态地图的自定位、代价感知
-A* 全局路径规划以及 Nav2 闭环自主导航。系统使用 TurtleBot4 的差速移动底盘模型、
-RPLIDAR 二维激光雷达、里程计与 TF 坐标变换；SLAM 阶段由 SLAM Toolbox 建立占据
-栅格地图并保存为 PGM/YAML，导航阶段由 AMCL 完成 \code{map} 坐标系下的位姿估计。
+Ignition Gazebo 仿真系统，完成环境建图、基于静态地图的自定位、代价感知 A*
+全局路径规划以及 Nav2 闭环自主导航。针对初版“建图范围小、路径短、雷达云漂移”
+的反馈，在原系统上增加扩展建图路线、地图覆盖率门槛、AMCL/TF/LaserScan 稳定性
+检查以及长距离导航 action 验收，形成可自动判定的证据链。
 
-为满足全局路径规划算法的编程要求，本实验按照 \code{nav2\_core::GlobalPlanner}
-接口实现 C++ A* 插件。算法在八连通栅格上采用 octile 启发函数，禁止对角穿角，
-并将代价地图栅格值引入边权，从而优先选择具有安全间隙的可行路径。实测生成的全局
-路径包含 189 个位姿，长度为 6.872 m，最大横向绕行为 2.425 m，路径绕过
-\code{shelf\_7} 占用区域。相同 Nav2 目标 UUID 的命令先返回
-\code{Goal accepted}，终态为 \code{SUCCEEDED (4)}，未进入
-\code{ABORTED (6)}；该终态同时证明目标检查器满足 0.25 m 位置容差。
+扩展 SLAM 验收中，机器人累计行程达到 5.00 m，已知栅格增加 58,506 个，分别满足
+不少于 5.0 m 与 15,000 个栅格的门槛。定位前置检查连续观察 15 s，实测
+\code{map -> base\_link} 位置漂移为 0.000 m、航向漂移为 0.000 rad，
+LaserScan 端点与地图占用栅格匹配率为 96.5\%，明显高于 35\% 下限。
 
-SLAM 流程中机器人里程计位移为 0.550 m，已知栅格数由 41,067 增至 45,925，
-增量为 4,858 个栅格，地图分辨率为 0.05 m/cell。VMware 测试主机配置约 6 vCPU、
-7.7 GiB 内存且无独立 GPU；最终导航运行通过 120 s 的 \code{/clock} 与
-\code{/scan} 启动验证。录屏中 RViz 曾短暂灰显并自行恢复，动作仍成功结束；该现象
-作为软件渲染下的显示性能限制披露，不影响自主导航的功能性结论。
+全局规划仍使用按照 \code{nav2\_core::GlobalPlanner} 接口实现的 C++ A* 插件。
+长距离目标设为 $(-7.0,-10.0,0.0)$，实测全局路径包含 370 个位姿，长度为
+13.460 m；同一 \code{NavigateToPose} action 经 385.981 s 墙钟时间进入
+\code{SUCCEEDED (4)}。最终提交视频完整覆盖目标发送前至到达目标后的全过程，
+时长 443.934 s，未使用加速、抽帧或删减。上述结果均来自仿真环境，不等同于实体
+TurtleBot4 性能验证。
 
 \noindent\textbf{关键词：}TurtleBot4；ROS 2；Ignition Gazebo；SLAM Toolbox；
 AMCL；Nav2；A*；自主导航
@@ -309,10 +307,20 @@ RViz 的 \code{Nav2 Goal} 工具向 BT Navigator 发送
   Ignition、SLAM/AMCL、Nav2 与 RViz 的统一仿真入口。\\
   \path{tb4_experiment_bringup/config/nav2_astar.yaml} &
   Planner、Controller、Costmap、Smoother 与 BT Navigator 参数。\\
+  \path{tb4_experiment_bringup/config/localization_stable.yaml} &
+  固定初始位姿、beam skipping、粒子数量与更新阈值等稳定 AMCL 参数。\\
+  \path{tb4_experiment_bringup/scripts/run_extended_mapping_route.py} &
+  原地扫描并沿多通道移动的扩展建图路线控制器。\\
+  \path{tb4_experiment_bringup/scripts/validate_slam_coverage.py} &
+  对累计行程和已知栅格增量进行自动验收。\\
+  \path{tb4_experiment_bringup/scripts/validate_localization_stability.py} &
+  对 TF 位姿漂移和 LaserScan/地图端点匹配率进行自动验收。\\
+  \path{tb4_experiment_bringup/scripts/run_long_navigation.py} &
+  发送长距离目标、拒绝短路径并保存 action 终态 JSON。\\
   \path{tb4_experiment_bringup/config/experiment.rviz} &
   固定 \code{map} frame、俯视方向、初始位姿工具和目标工具。\\
-  \path{maps/lab_map.yaml}, \path{maps/lab_map.pgm} &
-  SLAM 流程保存的增量地图。\\
+  \path{maps/lab_map.*}, \path{maps/extended_lab_map.*} &
+  初版短程地图与达到新覆盖率门槛后的扩展地图。\\
   \bottomrule
 \end{longtable}
 
@@ -342,10 +350,32 @@ RViz 的 \code{Nav2 Goal} 工具向 BT Navigator 发送
     \code{use\_diagonal} & true & 使用八连通搜索\\
     \code{cost\_penalty} & 2.0 & 膨胀代价惩罚\\
     \code{lethal\_cost} & 253 & 致命障碍阈值\\
+    \code{expected\_planner\_frequency} & 1.0 Hz & 长距离 A* 规划频率\\
     \code{robot\_radius} & 0.175 m & 代价地图机器人半径\\
     \code{inflation\_radius} & 0.45 m & 障碍膨胀半径\\
     \code{xy\_goal\_tolerance} & 0.25 m & 目标位置容差\\
     \code{smoothing\_frequency} & 20 Hz & 速度平滑频率\\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{定位与长距离验收门槛}
+\begin{table}[H]
+  \centering
+  \caption{助教复验版本的自动验收门槛}
+  \label{tab:acceptance-thresholds}
+  \begin{tabular}{lll}
+    \toprule
+    验收项 & 门槛 & 自动化工具\\
+    \midrule
+    SLAM 累计行程 & $\geq 5.0$ m & \code{validate\_slam\_coverage}\\
+    已知栅格增量 & $\geq 15,000$ & \code{validate\_slam\_coverage}\\
+    静止位置漂移 & $\leq 0.10$ m & \code{validate\_localization\_stability}\\
+    静止航向漂移 & $\leq 0.10$ rad & \code{validate\_localization\_stability}\\
+    LaserScan/地图匹配率 & $\geq 0.35$ & \code{validate\_localization\_stability}\\
+    A* 全局路径长度 & $\geq 12.0$ m & \code{run\_long\_navigation}\\
+    导航 action 终态 & \code{SUCCEEDED} & \code{run\_long\_navigation}\\
+    完整视频时长 & $\geq 300$ s & \code{ffprobe}\\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -365,30 +395,45 @@ colcon test-result --verbose
 工作空间构建成功，A* 核心算法单元测试通过。运行时进一步检查插件参数、
 Planner Server lifecycle 状态和 \code{/plan} 发布者，确认路径确由自定义插件生成。
 
-\subsection{SLAM 增量建图}
+\subsection{扩展 SLAM 建图}
 在 VMware 环境中使用低负载预设启动建图模式：
 \begin{lstlisting}[language=bash]
 ros2 run tb4_experiment_bringup vmware_simulation slam:=true
 \end{lstlisting}
 启动后确认仅存在一个 \code{/slam\_toolbox}，不存在 \code{/amcl}，且
-\code{/map} 的唯一发布者为 SLAM Toolbox。机器人通过
-\code{/cmd\_vel\_nav} 执行“直行—旋转—直行”的 L 形运动，速度经 smoother 输出到
-\code{/cmd\_vel}。记录运动前后地图摘要并保存：
+\code{/map} 的唯一发布者为 SLAM Toolbox。在两个独立终端启动覆盖率检查与扩展路线：
+\begin{lstlisting}[language=bash]
+ros2 run tb4_experiment_bringup validate_slam_coverage \
+  --min-distance 5.0 --min-known-cell-delta 15000
+
+ros2 run tb4_experiment_bringup run_extended_mapping_route
+\end{lstlisting}
+路线在起点和终点各执行一周原地扫描，并按相对起点
+$(-3,0)\rightarrow(-3,-10)\rightarrow(-7,-10)$ 穿过多个通道；前方
+0.55 m 内出现障碍时立即停止。路线速度发布到 \code{/cmd\_vel\_nav}，由已激活的
+Velocity Smoother 统一输出 \code{/cmd\_vel}，避免两个发布者互相覆盖。只有覆盖率
+检查输出 \code{[PASS]} 后才保存扩展地图：
 \begin{lstlisting}[language=bash]
 ros2 run nav2_map_server map_saver_cli \
-  -t /map -f experiment2/maps/lab_map
+  -t /map -f experiment2/maps/extended_lab_map
 \end{lstlisting}
 
-\subsection{AMCL 初始化与规划器检查}
+\subsection{稳定 AMCL 初始化与规划器检查}
 结束建图流程并完全关闭旧 Gazebo、RViz 与 ROS 2 launch 进程。A* 导航验证独立使用
-与 warehouse 世界严格匹配的官方静态地图；前述 \code{lab\_map} 用于证明 SLAM
-增量建图与保存，不把未完整探索的局部地图用于全局导航。为避免慢速虚拟机在 AMCL
+与 warehouse 世界严格匹配的官方静态地图，以避免未完整探索区域影响全局路径。
+启动文件默认加载 \code{localization\_stable.yaml}：初始位姿固定为 $(0,0,0)$，
+启用 beam skipping，并将粒子数范围设为 750--2500。为避免慢速虚拟机在 AMCL
 建立 \code{map -> odom} 前激活 Nav2，先只启动 Gazebo、AMCL 与 RViz：
 \begin{lstlisting}[language=bash]
 ros2 run tb4_experiment_bringup vmware_simulation start_nav2:=false
 \end{lstlisting}
-在 RViz 中点击 \code{2D Pose Estimate}，设定机器人初始位置和朝向，等待粒子云、
-LaserScan 与静态地图对齐；确认 \code{map -> odom} 有效后，在第二个终端启动 Nav2：
+发送目标前执行稳定性检查：
+\begin{lstlisting}[language=bash]
+ros2 run tb4_experiment_bringup validate_localization_stability
+\end{lstlisting}
+该节点等待 \code{/scan} 与 \code{map -> base\_link}，连续计算 15 s 的位置漂移、
+航向漂移，并将 LaserScan 端点投影到地图栅格中计算占用匹配率。检查通过后，在
+第二个终端启动 Nav2：
 \begin{lstlisting}[language=bash]
 PARAMS="$(ros2 pkg prefix tb4_experiment_bringup)/share/\
 tb4_experiment_bringup/config/nav2_astar.yaml"
@@ -405,176 +450,202 @@ ros2 topic info /plan -v
 实测返回的插件为 \code{tb4\_astar\_planner/AStarPlanner}，Planner Server 状态为
 \code{active [3]}，\code{/plan} 唯一发布者为 \code{planner\_server}。
 
-\subsection{发送导航目标}
-保持 RViz 显示地图和路径，在终端后台记录完整 \code{/plan}，再使用
-\code{ros2 action send\_goal} 将目标精确设置为
-$(-0.149,-3.924)$ m。该方式与 RViz \code{Nav2 Goal} 调用同一 action 接口，
-并可在完整录屏中同时保留终端终态和 RViz 路径。验收条件包括：
+\subsection{发送长距离导航目标}
+在目标发送前开始全屏连续录制，保持 RViz 显示地图、机器人、LaserScan、AMCL
+粒子、全局路径和代价地图，然后通过专用 action 运行器发送唯一长距离目标：
+\begin{lstlisting}[language=bash]
+ros2 run tb4_experiment_bringup run_long_navigation \
+  --x -7.0 --y -10.0 --yaw 0.0 \
+  --min-path-length 12.0 \
+  --evidence "$HOME/long-navigation-result.json"
+\end{lstlisting}
+\code{run\_long\_navigation} 订阅同一运行中的 \code{/plan}，计算相邻位姿欧氏距离
+之和；若路径短于 12.0 m，则取消 action 并判为失败。验收条件包括：
 \begin{enumerate}
-  \item 路径不少于 3 个位姿，首末点分别靠近机器人和目标；
-  \item 对 $y\in[-2.3,-1.7]$ 的路径点，均位于
-        $x\in[-1.9,1.7]$ 的 shelf 占用带之外；
-  \item 最大横向坐标绝对值不小于 2.0 m；
-  \item 同一条 action 命令先显示 \code{Goal accepted}，最终进入
-        \code{SUCCEEDED (4)}，不得进入 \code{ABORTED (6)}；
-  \item Nav2 目标检查器在配置的 0.25 m 位置容差内通过。
+  \item 全局路径长度不小于 12.0 m；
+  \item 路径跨越多个货架和通道，且不穿越占用或膨胀障碍；
+  \item 同一条 action 最终进入 \code{SUCCEEDED (4)}，不得进入
+        \code{ABORTED (6)}；
+  \item JSON 同时保存目标、路径位姿数、路径长度、墙钟时长和终态；
+  \item 视频从目标发送前开始，到机器人到达目标后结束，时长不少于 300 s，
+        不加速、不抽帧、不删减中间运动过程。
 \end{enumerate}
 
 \section{实验结果与分析}
 
-\subsection{SLAM 增量建图结果}
-图 2 与图 3 分别为运动前和完成 L 形运动后的
-RViz 状态。初始局部地图已显示机器人附近货架边界；运动后新激光观测扩大了已知区域，
-机器人模型、LaserScan 与地图保持一致。
+\subsection{改进前问题量化与验收策略}
+初版证据中的 SLAM 行程为 0.550 m、已知栅格增量为 4,858，全局路径长度为
+6.872 m。虽然能够证明基本功能链工作，但不足以展示多通道地图覆盖和长距离导航，
+也没有对“雷达云是否漂移”给出可量化判据。改进版本不删除上述原始数据，而是将其
+作为基线，并采用表~\ref{tab:acceptance-thresholds} 的更严格门槛重新验收。
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.86\textwidth]{slam_initial.png}
-  \caption{SLAM 建图运动前的局部地图}
-  \label{fig:slam-initial}
+  \includegraphics[width=\textwidth]{acceptance_improvements.png}
+  \caption{针对建图范围和路径长度反馈的改进前后对比}
+  \label{fig:acceptance-improvements}
 \end{figure}
 
-\begin{figure}[H]
-  \centering
-  \includegraphics[width=0.86\textwidth]{slam_final.png}
-  \caption{SLAM 建图运动后的增量地图}
-  \label{fig:slam-final}
-\end{figure}
-
-\begin{figure}[H]
-  \centering
-  \includegraphics[width=0.92\textwidth]{slam_metrics.png}
-  \caption{增量建图客观指标}
-  \label{fig:slam-metrics}
-\end{figure}
-
-表 4 给出 SLAM 结果。机器人位移 0.550 m，高于 0.50 m 验收阈值；
-已知栅格增加 4,858 个，证明地图随观测产生了有效增量。保存地图分辨率为
-0.05 m/cell，YAML 正确引用 \code{lab\_map.pgm}。
+\subsection{扩展 SLAM 覆盖率结果}
+\code{validate\_slam\_coverage} 同时订阅 \code{/map} 与 \code{/odom}，累计相邻
+里程计位姿距离，并比较初始地图与当前地图的已知栅格数量。单次大于 1.0 m 的里程计
+跳变会被拒绝，避免将 TF/仿真重置误记为有效运动。实测在累计行程达到 5.00 m 时，
+已知栅格增量已达到 58,506，显著超过 15,000 的门槛。
 
 \begin{table}[H]
   \centering
-  \caption{SLAM 流程量化结果}
+  \caption{扩展 SLAM 覆盖率量化结果}
   \label{tab:slam-results}
-  \begin{tabular}{lll}
+  \begin{tabular}{llll}
     \toprule
-    指标 & 实测值 & 判定\\
+    指标 & 改进前 & 改进后 & 判定\\
     \midrule
-    SLAM Toolbox 节点数 & 1 & 通过\\
-    AMCL 节点数 & 0 & 通过\\
-    初始已知栅格数 & 41,067 & ---\\
-    最终已知栅格数 & 45,925 & ---\\
-    已知栅格增量 & 4,858 & 通过\\
-    里程计位移 & 0.550 m & 通过（阈值 0.50 m）\\
-    地图分辨率 & 0.05 m/cell & 通过\\
-    地图文件 & YAML + PGM & 通过\\
-    \code{/clock} 监听 & 240.4 s 墙钟，状态 ok & 通过\\
+    累计行程 & 0.550 m & 5.00 m & 通过（门槛 5.0 m）\\
+    已知栅格增量 & 4,858 & 58,506 & 通过（门槛 15,000）\\
+    建图路线 & 单一 L 形短程 & 多通道三段路线 & 改进\\
+    前向安全检查 & 无自动门槛 & 0.55 m 障碍停机 & 通过\\
+    \code{/map}、\code{/odom} & 人工观察 & 同步自动订阅 & 通过\\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+图~\ref{fig:slam-baseline} 保留原始局部地图作为对照；新版提交同时提供
+\code{extended\_lab\_map.yaml/pgm}，用于保存达到覆盖率门槛后的地图快照。
+
+\begin{figure}[H]
+  \centering
+  \begin{subfigure}{0.49\textwidth}
+    \includegraphics[width=\textwidth]{slam_initial.png}
+    \caption{改进前初始局部地图}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}{0.49\textwidth}
+    \includegraphics[width=\textwidth]{slam_final.png}
+    \caption{改进前短程增量结果}
+  \end{subfigure}
+  \caption{初版短程 SLAM 证据基线}
+  \label{fig:slam-baseline}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.76\textwidth]{extended_lab_map.png}
+  \caption{达到 5.00 m / 58,506 cells 覆盖率门槛后保存的扩展地图}
+  \label{fig:extended-map}
+\end{figure}
+
+\subsection{AMCL、TF 与 LaserScan 稳定性}
+稳定性检查在机器人静止时连续观察 15 s。每个有效 LaserScan 端点通过
+\code{map -> scan} TF 投影到占据栅格，若端点在 0.20 m 邻域内命中占用栅格，则计为
+匹配。实测位置漂移和航向漂移均为 0，端点匹配率为 0.965；因此“雷达云在飘”不再
+仅凭 RViz 观感判断，而由 TF 漂移和地图几何匹配两个指标共同判定。
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.92\textwidth]{localization_acceptance.png}
+  \caption{AMCL、LaserScan 与长距离导航自动验收结果}
+  \label{fig:localization-acceptance}
+\end{figure}
+
+\begin{table}[H]
+  \centering
+  \caption{定位和激光稳定性结果}
+  \label{tab:localization-results}
+  \begin{tabular}{llll}
+    \toprule
+    指标 & 实测值 & 门槛 & 判定\\
+    \midrule
+    稳定观察窗口 & 15.0 s & 15.0 s & 通过\\
+    位置漂移 & 0.000 m & $\leq 0.10$ m & 通过\\
+    航向漂移 & 0.000 rad & $\leq 0.10$ rad & 通过\\
+    LaserScan/地图匹配率 & 0.965 & $\geq 0.35$ & 通过\\
+    端点匹配容差 & 0.20 m & 0.20 m & 通过\\
     \bottomrule
   \end{tabular}
 \end{table}
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.72\textwidth]{lab_map.png}
-  \caption{SLAM 流程保存的占据栅格地图}
-  \label{fig:saved-map}
+  \includegraphics[width=0.86\textwidth]{long_navigation_start.png}
+  \caption{长距离目标发送前的 RViz：地图、机器人、LaserScan 与 AMCL 粒子}
+  \label{fig:long-navigation-start}
 \end{figure}
 
-\subsection{AMCL 自定位结果}
-图 6 为本次最终复现实验的初始导航界面，Navigation 与 Localization 均处于
-active 状态，机器人初始位姿和 warehouse 静态地图清晰可见。终端采样确认
-\code{map -> odom -> base\_link} TF 链持续有效，满足全局规划的坐标基础。
+\subsection{长距离 A* 路径与闭环执行}
+Planner Server 日志确认创建的插件类型为
+\code{tb4\_astar\_planner/AStarPlanner}，参数查询返回同一类型。目标设置为
+$(-7.0,-10.0,0.0)$ 后，\code{run\_long\_navigation} 收到 370 个路径位姿，
+相邻位姿累计长度为 13.459614 m，超过 12.0 m 的最低要求。RViz 中的红色全局路径
+跨越多个货架与通道，机器人在 DWB 与速度平滑器闭环控制下沿路径移动。
 
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.86\textwidth]{amcl_localized.png}
-  \caption{最终复现实验的 AMCL 初始定位与导航激活界面}
-  \label{fig:amcl}
-\end{figure}
-
-\subsection{A* 路径与绕障结果}
-图 7 使用 ROS 2 \code{/plan} 原始位姿绘制。路径从机器人附近出发，
-先向负 $x$ 方向绕到货架端部，再进入目标所在下方走廊；在
-$y\in[-2.3,-1.7]$ 范围内，路径点均位于 \code{shelf\_7} 判定带之外。
-
-\begin{figure}[H]
-  \centering
-  \includegraphics[width=0.82\textwidth]{astar_path_metrics.png}
-  \caption{A* 全局路径与 shelf\_7 绕障判定}
-  \label{fig:path-metrics}
-\end{figure}
-
-\begin{figure}[H]
-  \centering
-  \includegraphics[width=0.86\textwidth]{astar_navigation.png}
-  \caption{完整导航录屏中的 A* 全局路径与执行状态}
-  \label{fig:astar-rviz}
+  \includegraphics[width=0.86\textwidth]{long_navigation_path.png}
+  \caption{长距离 A* 全局路径跨越多个 warehouse 通道}
+  \label{fig:long-navigation-path}
 \end{figure}
 
 \begin{table}[H]
   \centering
-  \caption{全局路径量化结果}
+  \caption{长距离全局路径和 action 结果}
   \label{tab:path-results}
   \begin{tabular}{lll}
     \toprule
     指标 & 实测值 & 判定\\
     \midrule
-    路径位姿数量 & 189 & 通过\\
-    起点 & $(0.000,0.000)$ m & 与机器人初始位姿一致\\
-    终点 & $(-0.149,-3.924)$ m & 与目标一致\\
-    路径长度 & 6.872 m & ---\\
-    最大横向绕行 & 2.425 m & 通过（阈值 2.0 m）\\
-    shelf 占用带违规点 & 0 & 通过\\
-    \code{/plan} 发布者 & \code{planner\_server} 唯一发布 & 通过\\
+    目标位姿 & $(-7.0,-10.0,0.0)$ & 与验收目标一致\\
+    路径位姿数量 & 370 & 通过\\
+    路径长度 & 13.459614 m & 通过（门槛 12.0 m）\\
+    墙钟执行时长 & 385.981 s & 完整等待终态\\
+    终态码 & 4 & \code{SUCCEEDED}\\
+    \code{/plan} 发布者 & \code{planner\_server} & 通过\\
     \bottomrule
   \end{tabular}
 \end{table}
 
-\subsection{Nav2 导航终态}
-目标 UUID 缩写为 \code{1b1c...59f1}，完整值保存在提交包的 action 数据文件中。
-同一条 \code{ros2 action send\_goal} 命令先显示 \code{Goal accepted}，随后返回
-\code{Goal finished with status: SUCCEEDED}，对应终态码 4，未进入
-\code{ABORTED (6)}。本次录屏没有同步保存终态 TF 数值，因此报告不沿用其他运行的
-精确距离；\code{SUCCEEDED} 证明 Nav2 目标检查器已在配置的 0.25 m 位置容差内通过。
-
 \begin{figure}[H]
   \centering
-  \includegraphics[width=0.86\textwidth]{navigation_reached.png}
-  \caption{自主导航终态：NavigateToPose action 返回 SUCCEEDED}
-  \label{fig:reached}
+  \includegraphics[width=0.86\textwidth]{long_navigation_goal.png}
+  \caption{长距离导航终点：RViz 显示 Feedback: reached}
+  \label{fig:long-navigation-goal}
 \end{figure}
+
+\subsection{完整无加速视频验收}
+录屏从目标发送前开始，到机器人到达目标并由同一 action 返回
+\code{SUCCEEDED} 后结束。结构化录屏工具另生成了 20.959 s 的标注摘要，该文件
+不作为验收视频；最终提交视频由四个按时间连续的原始 MKV 分段使用 FFmpeg concat
+demuxer 和 \code{-c copy} 无损拼接，再以 stream copy 封装为 MP4。整个过程未使用
+\code{setpts}、trim、fps 转换或其他速度/删减滤镜。
 
 \begin{table}[H]
   \centering
-  \caption{仿真自主导航最终验收}
-  \label{tab:final-results}
-  \begin{tabularx}{\textwidth}{p{5.5cm}p{4.5cm}X}
+  \caption{最终完整视频技术信息}
+  \label{tab:video-results}
+  \begin{tabular}{lll}
     \toprule
-    验收项 & 实测结果 & 判定\\
+    指标 & 实测值 & 判定\\
     \midrule
-    Ignition Gazebo 中机器人实际运动 & 物理仿真、传感器与速度闭环运行 & 通过\\
-    AMCL 自定位 & \code{map} frame，TF 有效 & 通过\\
-    自定义全局规划器加载 & \scriptsize\code{tb4\_astar\_planner/AStarPlanner} & 通过\\
-    货架绕障 & 0 个 shelf 带违规点 & 通过\\
-    Nav2 动作终态 & 同一 UUID：accepted $\rightarrow$ SUCCEEDED (4) & 通过\\
-    目标位置容差 & 0.25 m goal checker 已通过 & 通过\\
-    \code{/clock} 与 \code{/scan} 启动验证 & 连续观察 120 s，watchdog 已启用 & 通过\\
+    文件 & \code{实验二-自主导航.mp4} & 通过\\
+    时长 & 443.934 s（7 min 23.934 s） & 通过（门槛 300 s）\\
+    编码 & H.264 & 通过\\
+    分辨率 & $1600\times1200$ & 通过\\
+    帧率 & 15 fps & 保持原始采集帧率\\
+    加速/删减滤镜 & 未使用 & 通过\\
     \bottomrule
-  \end{tabularx}
+  \end{tabular}
 \end{table}
 
 \subsection{仿真时钟与低负载配置分析}
-SLAM 流程的时钟监视器在 240.4 s 墙钟内接收 427 个样本，仿真时间从 32.5 s 增至
-75.1 s，状态为 \code{ok}。最终导航复现实验由
-\code{vmware\_simulation\_validator} 连续观察 120 s 墙钟，确认 \code{/clock}
-推进，且 \code{/scan} 含 1.339--11.997 m 的环境回波；通过后 15 s 停钟 watchdog
-继续运行。提交数据只将已保存的 120 s 检查记为严格通过，不以动作成功替代未单独
-保存的全程时钟采样。
+启动阶段由 \code{vmware\_simulation\_validator} 连续观察 120 s 墙钟，确认
+\code{/clock} 推进，且 \code{/scan} 包含 1.339--11.997 m 的环境回波；通过后
+15 s 停钟 watchdog 继续运行。最终长距离 action 又持续 385.981 s 墙钟并正常结束，
+完整录屏持续 443.934 s，说明本次验收期间物理、传感器、定位、规划与控制链路均
+持续工作。
 
 本机约 6 vCPU、7.7 GiB 内存且无独立 GPU。Gazebo 软件渲染、RPLIDAR、
-AMCL、两套 costmap 与 RViz 同时运行时仍会竞争 CPU 和虚拟 GPU；录屏中 RViz
-曾短暂灰显后自行恢复，路径显示和 action 执行没有中断。为获得可完成的端到端实验，
-证据采集使用了以下低负载配置：
+AMCL、两套 costmap 与 RViz 同时运行时仍会竞争 CPU 和虚拟 GPU；Nav2 日志中出现
+\code{Behavior Tree tick rate 100.00 was exceeded} 警告，但未导致 action 中止。
+为获得可完成的端到端实验，证据采集使用了以下低负载配置：
 \begin{itemize}
   \item Gazebo 以 server-only 模式运行，关闭三维客户端但保留物理、传感器和时钟；
   \item OAK-D 停用；关闭 Create 3 cliff/IR GPU lidar 及其 ROS 桥接，因为导航使用
@@ -615,6 +686,29 @@ SLAM/AMCL 模式完全隔离。该修改使“一个地图源、一个定位源�
 和 BT Navigator 随后均进入 \code{active [3]}。该分阶段顺序避免把 lifecycle
 阻塞误判为 A* 算法错误。
 
+\subsection{建图范围与长路径的自动门槛}
+初版只依赖人工遥控和截图，导致 0.550 m 的运动也可被描述为“完成建图”，6.872 m
+路径也缺乏统一的长距离标准。改进后，\code{validate\_slam\_coverage} 将 5.0 m
+累计行程和 15,000 个已知栅格增量作为双门槛；\code{run\_long\_navigation} 则在
+同一 action 内强制路径长度至少为 12.0 m，并将终态写入 JSON。门槛未满足时工具
+直接返回非零状态，避免仅凭机器人开始运动就判定成功。
+
+扩展路线最初直接发布 \code{/cmd\_vel}，与已激活的 Velocity Smoother 输出形成
+竞争，可能导致旋转后无法继续直行。最新版将路线输入改为 \code{/cmd\_vel\_nav}，
+确保所有路线速度都经过同一平滑器，再由其唯一发布到底盘速度话题。
+
+\subsection{雷达云漂移的量化判定}
+RViz 灰显、低帧率或画面拖影不等同于 AMCL 漂移。新验证器同时测量
+\code{map -> base\_link} 平移/航向变化，并使用占据地图对 LaserScan 端点进行几何
+命中检查。只有 15 s 内漂移不超过 0.10 m/0.10 rad 且匹配率不低于 0.35 才允许
+进入导航阶段，使“雷达云稳定”从主观观察转为可复现实验指标。
+
+\subsection{完整视频证据保真}
+最终录屏工具会同时生成短标注摘要和分段原始视频。为遵守“不加速、不剪缩”的验收
+要求，报告与提交包仅使用按时间顺序无损拼接的原始分段；\code{ffprobe} 对最终 MP4
+再次验证 443.934 s 时长、15 fps 和 H.264 编码。该处理只改变容器与文件分段，不
+改变帧时间轴。
+
 \subsection{后续优化方向}
 \begin{enumerate}
   \item 在统一 launch 中以 TF/lifecycle 条件自动执行当前的分阶段 Nav2 启动；
@@ -633,15 +727,16 @@ warehouse 环境、激光雷达、里程计与物理运动；SLAM Toolbox 建立
 AMCL 在静态地图上完成自定位；自定义代价感知 A* 以 Nav2 pluginlib 插件形式生成
 无碰撞全局路径；DWB、速度平滑器和 Create 3 仿真底盘构成闭环执行系统。
 
-实验的量化结果表明，SLAM 已知区域增加 4,858 个栅格，地图分辨率为 0.05 m/cell；
-A* 路径包含 189 个位姿、长度 6.872 m，并以 2.425 m 的横向绕行避开
-\code{shelf\_7}；Nav2 同一目标 UUID 从 accepted 进入
-\code{SUCCEEDED (4)}，目标检查器在 0.25 m 位置容差内通过。因此，课程提出的
-“在 Ignition Gazebo 仿真环境中实现 TurtleBot4 自主导航”已经完成。
+针对助教反馈完成的量化改进为：SLAM 累计行程由 0.550 m 提升至 5.00 m，已知栅格
+增量由 4,858 提升至 58,506；静止定位 15 s 内位置/航向漂移均为 0，LaserScan
+地图匹配率达到 96.5\%；A* 路径由 6.872 m 提升至 13.460 m，包含 370 个位姿。
+同一长距离 \code{NavigateToPose} action 经 385.981 s 墙钟时间进入
+\code{SUCCEEDED (4)}，完整无加速视频时长为 443.934 s。因此，改进版本不仅完成
+TurtleBot4 仿真自主导航，也对地图覆盖、路径长度、雷达稳定性和视频完整性给出了
+可重复、可自动判定的证据。
 
-最终运行通过 120 s 的时钟和扫描启动验证；VMware 软件渲染下仍出现过可自行恢复的
-RViz 短暂灰显。报告保守地区分了已保存的连续性证据、显示性能现象和动作终态，
-并提供默认配置复测建议。
+本报告的结果仅适用于 VMware 低负载仿真环境。软件渲染和降频设置改变了实时性能与
+传感器更新频率，不能替代默认高保真仿真或实体 TurtleBot4 的安全与性能验证。
 
 \clearpage
 \begin{thebibliography}{99}
@@ -703,13 +798,22 @@ ros2 launch turtlebot4_navigation nav2.launch.py \
   use_sim_time:=true params_file:="$PARAMS"
 \end{lstlisting}
 Planner、Controller 与 BT Navigator 均为 \code{active [3]} 后，再使用 RViz
-\code{Nav2 Goal} 或 \code{ros2 action send\_goal} 发送唯一目标。
+\code{Nav2 Goal} 或以下工具发送唯一目标：
+\begin{lstlisting}[language=bash]
+ros2 run tb4_experiment_bringup validate_localization_stability
+ros2 run tb4_experiment_bringup run_long_navigation \
+  --x -7.0 --y -10.0 --min-path-length 12.0 \
+  --evidence "$HOME/long-navigation-result.json"
+\end{lstlisting}
 
 \subsection{建图模式}
 \begin{lstlisting}[language=bash]
 source /opt/ros/humble/setup.bash
 source experiment2/ros2_ws/install/setup.bash
 ros2 run tb4_experiment_bringup vmware_simulation slam:=true
+ros2 run tb4_experiment_bringup validate_slam_coverage \
+  --min-distance 5.0 --min-known-cell-delta 15000
+ros2 run tb4_experiment_bringup run_extended_mapping_route
 \end{lstlisting}
 
 \subsection{低负载预设}

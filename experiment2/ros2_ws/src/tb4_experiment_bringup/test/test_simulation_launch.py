@@ -47,3 +47,12 @@ def test_namespace_is_available_to_delayed_controller_actions():
 def test_localization_parameters_can_be_overridden():
     arguments = launch_arguments()
     assert 'localization_params' in arguments
+
+
+def test_extended_mapping_route_uses_velocity_smoother_input():
+    script = (
+        Path(__file__).parents[1]
+        / 'scripts'
+        / 'run_extended_mapping_route.py'
+    )
+    assert "create_publisher(Twist, '/cmd_vel_nav', 10)" in script.read_text()

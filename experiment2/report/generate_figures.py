@@ -239,9 +239,140 @@ def path_plot():
     plt.close(fig)
 
 
+def acceptance_improvements():
+    data = json.loads((DATA / "acceptance-summary.json").read_text())
+    previous = data["previous_baseline"]
+    slam = data["slam_coverage"]
+    navigation = data["navigation"]
+
+    fig, axes = plt.subplots(1, 3, figsize=(12.5, 4.4))
+    entries = [
+        (
+            axes[0],
+            "SLAM 累计行程",
+            previous["slam_distance"],
+            slam["distance"],
+            slam["minimum_distance"],
+            "m",
+        ),
+        (
+            axes[1],
+            "已知栅格增量",
+            previous["known_cell_delta"],
+            slam["known_cell_delta"],
+            slam["minimum_known_cell_delta"],
+            "cell",
+        ),
+        (
+            axes[2],
+            "A* 全局路径长度",
+            previous["path_length"],
+            navigation["path_length"],
+            navigation["minimum_path_length"],
+            "m",
+        ),
+    ]
+    for axis, title, baseline, improved, threshold, unit in entries:
+        bars = axis.bar(
+            ["改进前", "改进后"],
+            [baseline, improved],
+            color=["#94a3b8", "#2563eb"],
+            width=0.58,
+        )
+        axis.axhline(
+            threshold,
+            color="#dc2626",
+            linestyle="--",
+            linewidth=1.3,
+            label=f"验收阈值 {threshold:g} {unit}",
+        )
+        axis.set_title(title)
+        axis.set_ylabel(unit)
+        axis.grid(axis="y", alpha=0.2)
+        axis.legend(frameon=False, fontsize=8)
+        for bar, value in zip(bars, [baseline, improved]):
+            label = f"{value:,.3f}" if unit == "m" else f"{value:,.0f}"
+            axis.text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height(),
+                label,
+                ha="center",
+                va="bottom",
+                fontsize=9,
+                fontweight="bold",
+            )
+    fig.suptitle("针对助教反馈的量化改进对比", fontsize=15, fontweight="bold", y=1.02)
+    fig.tight_layout()
+    fig.savefig(FIGURES / "acceptance_improvements.png", bbox_inches="tight")
+    plt.close(fig)
+
+
+def localization_acceptance():
+    data = json.loads((DATA / "acceptance-summary.json").read_text())
+    localization = data["localization_stability"]
+    navigation = data["navigation"]
+    video = data["video"]
+
+    fig, axes = plt.subplots(1, 2, figsize=(10.8, 4.4))
+    labels = ["位置漂移", "航向漂移"]
+    values = [
+        localization["position_drift"],
+        localization["yaw_drift"],
+    ]
+    thresholds = [
+        localization["maximum_position_drift"],
+        localization["maximum_yaw_drift"],
+    ]
+    axes[0].bar(labels, thresholds, color="#dbeafe", edgecolor="#2563eb", width=0.56)
+    axes[0].scatter(labels, values, color="#16a34a", s=90, zorder=5, label="实测值")
+    axes[0].set_ylim(0, 0.12)
+    axes[0].set_ylabel("m / rad")
+    axes[0].set_title("15 s 静止位姿稳定性")
+    axes[0].grid(axis="y", alpha=0.2)
+    axes[0].legend(frameon=False)
+    for index, threshold in enumerate(thresholds):
+        axes[0].text(index, threshold + 0.004, f"上限 {threshold:.2f}", ha="center", fontsize=9)
+        axes[0].text(index, 0.004, "实测 0.000", ha="center", fontsize=9, color="#166534")
+
+    axes[1].axis("off")
+    lines = [
+        "LaserScan / 地图匹配率",
+        f"{localization['scan_alignment'] * 100:.1f}%（阈值 "
+        f"{localization['minimum_scan_alignment'] * 100:.0f}%）",
+        "",
+        "长距离导航",
+        f"{navigation['path_pose_count']} 个位姿 / {navigation['path_length']:.3f} m",
+        f"{navigation['wall_duration_seconds']:.1f} s / {navigation['terminal_status_label']}",
+        "",
+        "完整录屏",
+        f"{video['duration_seconds']:.3f} s，无加速、无删减",
+    ]
+    axes[1].text(
+        0.5,
+        0.5,
+        "\n".join(lines),
+        ha="center",
+        va="center",
+        fontsize=12,
+        linespacing=1.45,
+        bbox={
+            "boxstyle": "round,pad=0.8",
+            "facecolor": "#f8fafc",
+            "edgecolor": "#94a3b8",
+        },
+    )
+    fig.suptitle("定位、雷达与长距离导航验收结果", fontsize=15, fontweight="bold", y=1.02)
+    fig.tight_layout()
+    fig.savefig(FIGURES / "localization_acceptance.png", bbox_inches="tight")
+    plt.close(fig)
+
+
 def map_png():
     image = Image.open(MAPS / "lab_map.pgm")
     image.save(FIGURES / "lab_map.png")
+    extended = MAPS / "extended_lab_map.pgm"
+    if extended.exists():
+        Image.open(extended).save(FIGURES / "extended_lab_map.png")
 
 
 def main():
@@ -250,6 +381,8 @@ def main():
     architecture()
     slam_metrics()
     path_plot()
+    acceptance_improvements()
+    localization_acceptance()
     map_png()
 
 
