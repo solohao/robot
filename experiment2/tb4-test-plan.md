@@ -1,9 +1,10 @@
-# TurtleBot4 A* 自主导航端到端测试计划（低负载最终版）
+# TurtleBot4 A* 长距离自主导航端到端测试计划
 ## 目标
  
 在 TurtleBot4 官方 warehouse 世界中，通过 RViz2 完成 AMCL 初始化，并通过
 Nav2 action 发送精确目标，证明 Humble 默认 `GridBased` 标识实际动态加载
-`tb4_astar_planner/AStarPlanner`，生成绕开 `shelf_7` 的完整路径，并使
+`tb4_astar_planner/AStarPlanner`，生成长度不少于 `12 m`、跨越多个货架区域的
+完整路径，并使
 机器人到达目标、同一 action 进入 `SUCCEEDED (4)`。 
 
 
@@ -120,23 +121,44 @@ ros2 topic info /plan -v > plan-topic-info.txt
 ```
 
 通过标准：`/plan` 恰有一个发布者，节点名为 `planner_server`。
-## 单一端到端流程
+## 扩展 SLAM 地图
+
+启动 SLAM、覆盖率验证器和自动路线：
+
+```bash
+ros2 run tb4_experiment_bringup vmware_simulation slam:=true
+ros2 run tb4_experiment_bringup validate_slam_coverage \
+  --min-distance 5.0 --min-known-cell-delta 15000
+ros2 run tb4_experiment_bringup run_extended_mapping_route
+```
+
+通过标准：
+
+- 自动路线完整经过 `(-3, 0) -> (-3, -10) -> (-7, -10)`；
+- 累计行程不少于 `5 m`；
+- 已知栅格增量不少于 `15,000`；
+- 初始和最终各完成一周原地扫描；
+- 保存 `extended_lab_map.yaml` 和 `extended_lab_map.pgm`；
+- 地图包含多个货架、中央通道和长距离目标附近区域。
+
+## 单一端到端导航流程
  
 ### 1. AMCL 初始化
  
-1. 最大化并聚焦 RViz2，开始录制完整桌面。
-2. 按 `p` 激活 `2D Pose Estimate`。
-3. 在可见机器人模型中心按下并沿其正向轴拖动短箭头后释放。
-4. 等待粒子云集中和 LaserScan 与地图边缘基本对齐。
-5. 运行：
+1. 使用扩展地图启动 Gazebo、AMCL 和 RViz，暂不启动 Nav2。
+2. 最大化并聚焦 RViz2。
+3. 等待粒子云集中和 LaserScan 与地图边缘基本对齐。
+4. 运行：
  
    ```bash
-   timeout 10s ros2 run tf2_ros tf2_echo map odom
+   ros2 run tb4_experiment_bringup validate_localization_stability
    ```
  
 通过标准：
  
-- `map -> odom` 返回含 Translation 和 Rotation 的有效 Transform；
+- `map -> base_link` 连续 15 秒平移漂移不超过 `0.10 m`；
+- 航向漂移不超过 `0.10 rad`；
+- 激光端点与地图占用栅格匹配比例不低于 `0.35`；
 - 粒子云集中在机器人附近；
 - RViz Global Status 不再持续 Error；
 - LaserScan 与已知地图边缘基本对齐。
@@ -176,27 +198,26 @@ planner GridBased is not a valid planner
 ### 3. 发送精确目标并验证完整 A* 路径
 
 1. 先启动前述 `/plan --full-length --once` 后台监听器。
-2. 通过终端发送唯一目标：
+2. 开始录制完整桌面，录屏不得加速、抽帧或删减机器人运动过程。
+3. 通过终端发送唯一长距离目标：
 
    ```bash
-   ros2 action send_goal /navigate_to_pose \
-     nav2_msgs/action/NavigateToPose \
-     "{pose: {header: {frame_id: map}, pose: {position: {x: -0.149, y: -3.924, z: 0.0}, orientation: {w: 1.0}}}}"
+   ros2 run tb4_experiment_bringup run_long_navigation \
+     --x -7.0 --y -10.0 --min-path-length 12.0 \
+     --evidence "$HOME/long-navigation-result.json"
    ```
 
-3. 保持 RViz 可见，等待路径显示和 `$HOME/astar_plan.yaml` 保存完成。
+4. 保持 RViz 和 action 终端同时可见，等待路径显示、机器人完整运动和终态。
  
 通过标准：
 - pose 数量 `>= 3`；
 - 首 pose 与机器人起点距离 `<= 0.30 m`；
-- 末 pose 与目标 `(-0.149, -3.924)` 距离 `<= 0.35 m`；
-- 在 `y=[-2.3,-1.7]` 的每个路径点均不位于
-  `x=[-1.9,1.7]` 内；
-- 全路径 `max(|x|) >= 2.0 m`；
-- RViz 红色全局路径明显绕过 `shelf_7`，不穿过灰色占用区或粉色膨胀区；
+- 末 pose 与目标 `(-7.0, -10.0)` 距离 `<= 0.35 m`；
+- 全局路径长度 `>= 12.0 m`；
+- RViz 红色全局路径跨越多个货架区域，不穿过灰色占用区或粉色膨胀区；
 - `/plan` 发布者为 `planner_server`。
  ### 4. 导航终态
- 保持 RViz2 可见，目标发送后最多等待 300 秒墙钟。
+ 保持 RViz2 和终端可见，目标发送后最多等待 1200 秒墙钟。
  
 通过标准：
  - 机器人沿红色全局路径和蓝色局部路径运动；
@@ -207,8 +228,12 @@ planner GridBased is not a valid planner
 - 不出现终态 `ABORTED`；
 - `SUCCEEDED` 证明 Nav2 `xy_goal_tolerance=0.25 m` 已满足。若未另存终态 TF，
   不得虚构精确最终距离。
- 若 300 秒后没有 `SUCCEEDED (4)`，本项标记为 `failed` 或
+ 若 1200 秒后没有 `SUCCEEDED (4)`，本项标记为 `failed` 或
 `inconclusive`。
+
+录屏必须从长距离目标发送前开始，到同一 action 输出 `SUCCEEDED` 后结束。视频需
+保留真实墙钟速度和完整运动过程，预期明显超过 5 分钟；不得倍速、跳剪或仅提交
+一分钟摘要。
  ## GUI 证据与报告
  
 报告使用以下三张证据图：

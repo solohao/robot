@@ -89,6 +89,35 @@ source /opt/ros/humble/setup.bash
 ros2 run nav2_map_server map_saver_cli -f lab_map
 ```
 
+### 扩展建图验收
+
+助教验收版本不再使用只移动约 `0.55 m` 的短程建图。启动 SLAM 后，在两个独立终端
+分别运行覆盖率检查器和安全路线控制器：
+
+```bash
+ros2 run tb4_experiment_bringup validate_slam_coverage \
+  --min-distance 5.0 --min-known-cell-delta 15000
+```
+
+```bash
+ros2 run tb4_experiment_bringup run_extended_mapping_route
+```
+
+路线会先原地扫描一周，再沿中央通道依次到达相对起点
+`(-3, 0) -> (-3, -10) -> (-7, -10)`，最后再次原地扫描。前方 `0.55 m`
+内检测到障碍时脚本会停止并失败，不能绕过安全检查继续录制。覆盖率检查器同时要求：
+
+- 里程计累计行程不少于 `5 m`；
+- 已知地图栅格增量不少于 `15,000`；
+- `/map` 与 `/odom` 持续发布。
+
+两个脚本都显示 `[PASS]` 后保存扩展地图：
+
+```bash
+ros2 run nav2_map_server map_saver_cli \
+  -f "$PWD/experiment2/maps/extended_lab_map"
+```
+
 ## VMware 低负载一键预设
 
 VMware Workstation 的 `SVGA3D + OGRE2` 组合可能使 Ignition
@@ -163,6 +192,32 @@ Planner、Controller 与 BT Navigator 均为 `active [3]` 后再发送唯一目�
 验证建图而不需要 RViz，可传入 `start_rviz:=false`。若需在 SLAM 期间同时启动
 Nav2，可显式传入 `start_nav2:=true`。软件渲染下仿真可能慢于现实时间，但只要
 `/clock` 持续推进，就不会改变使用仿真时间的 SLAM/Nav2 算法逻辑。
+
+助教验收版本默认使用 `localization_stable.yaml`。仿真出生点与地图原点均为
+`(0, 0, 0)`，AMCL 会从确定性初始位姿启动，并提高激光更新频率、启用 beam
+skipping。发送目标前必须运行：
+
+```bash
+ros2 run tb4_experiment_bringup validate_localization_stability
+```
+
+该检查连续观察 15 秒，要求：
+
+- `map -> base_link` 平移漂移不超过 `0.10 m`；
+- 航向漂移不超过 `0.10 rad`；
+- 至少 35% 的有效激光端点在 `0.20 m` 内匹配地图占用栅格。
+
+检查通过后发送长距离目标：
+
+```bash
+ros2 run tb4_experiment_bringup run_long_navigation \
+  --x -7.0 --y -10.0 --min-path-length 12.0 \
+  --evidence "$HOME/long-navigation-result.json"
+```
+
+该命令拒绝短于 `12 m` 的全局路径，完整等待同一 action 到
+`SUCCEEDED`，并保存路径长度、位姿数、真实墙钟时长和终态。最终录屏必须从目标
+发送前开始，连续保留 RViz 与终端，直到终态输出；不得加速、抽帧或剪成一分钟摘要。
 
 ## 实机运行
 
