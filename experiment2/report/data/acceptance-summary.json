@@ -1,0 +1,68 @@
+{
+  "tested_at": "2026-07-14",
+  "environment": {
+    "os": "Ubuntu 22.04",
+    "ros": "ROS 2 Humble",
+    "simulator": "TurtleBot4 warehouse / Ignition Gazebo",
+    "scope": "simulation"
+  },
+  "previous_baseline": {
+    "slam_distance": 0.5501375879200879,
+    "known_cell_delta": 4858,
+    "path_pose_count": 189,
+    "path_length": 6.872
+  },
+  "slam_coverage": {
+    "distance": 5.0,
+    "minimum_distance": 5.0,
+    "known_cell_delta": 58506,
+    "minimum_known_cell_delta": 15000,
+    "saved_map": {
+      "image": "extended_lab_map.pgm",
+      "width": 526,
+      "height": 452,
+      "resolution": 0.05,
+      "origin": [-14.9, -12.3, 0.0]
+    },
+    "result": "passed",
+    "evidence": "validate_slam_coverage runtime output"
+  },
+  "localization_stability": {
+    "stable_window_seconds": 15.0,
+    "position_drift": 0.0,
+    "maximum_position_drift": 0.1,
+    "yaw_drift": 0.0,
+    "maximum_yaw_drift": 0.1,
+    "scan_alignment": 0.965,
+    "minimum_scan_alignment": 0.35,
+    "result": "passed",
+    "evidence": "validate_localization_stability runtime output"
+  },
+  "navigation": {
+    "goal": {
+      "x": -7.0,
+      "y": -10.0,
+      "yaw": 0.0
+    },
+    "minimum_path_length": 12.0,
+    "path_pose_count": 370,
+    "path_length": 13.45961400582139,
+    "wall_duration_seconds": 385.9811685679997,
+    "terminal_status": 4,
+    "terminal_status_label": "SUCCEEDED",
+    "result": "passed",
+    "evidence": "run_long_navigation JSON output"
+  },
+  "video": {
+    "file": "../../video/实验二-自主导航.mp4",
+    "codec": "h264",
+    "width": 1600,
+    "height": 1200,
+    "frame_rate": "15/1",
+    "duration_seconds": 443.934,
+    "minimum_duration_seconds": 300.0,
+    "speed_filters_applied": false,
+    "result": "passed",
+    "evidence": "ffprobe and lossless stream-copy concat"
+  }
+}

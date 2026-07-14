@@ -43,7 +43,7 @@ class ExtendedMappingRoute(Node):
 
     def __init__(self, waypoints: list[tuple[float, float]]) -> None:
         super().__init__('extended_mapping_route')
-        self.publisher = self.create_publisher(Twist, '/cmd_vel', 10)
+        self.publisher = self.create_publisher(Twist, '/cmd_vel_nav', 10)
         self.create_subscription(Odometry, '/odom', self.odom_callback, 10)
         self.create_subscription(LaserScan, '/scan', self.scan_callback, 10)
         self.timer = self.create_timer(0.1, self.control)
