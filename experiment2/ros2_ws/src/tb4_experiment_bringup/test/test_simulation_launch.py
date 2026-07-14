@@ -18,7 +18,7 @@ from pathlib import Path
 from launch.actions import DeclareLaunchArgument
 
 
-def test_namespace_is_available_to_delayed_controller_actions():
+def launch_arguments():
     launch_path = (
         Path(__file__).parents[1] / 'launch' / 'simulation.launch.py'
     )
@@ -32,10 +32,18 @@ def test_namespace_is_available_to_delayed_controller_actions():
     spec.loader.exec_module(module)
 
     description = module.generate_launch_description()
-    arguments = {
+    return {
         action.name
         for action in description.entities
         if isinstance(action, DeclareLaunchArgument)
     }
 
+
+def test_namespace_is_available_to_delayed_controller_actions():
+    arguments = launch_arguments()
     assert 'namespace' in arguments
+
+
+def test_localization_parameters_can_be_overridden():
+    arguments = launch_arguments()
+    assert 'localization_params' in arguments

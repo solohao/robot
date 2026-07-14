@@ -38,6 +38,7 @@ def generate_launch_description():
     gz_args = LaunchConfiguration('gz_args')
     slam = LaunchConfiguration('slam')
     map_file = LaunchConfiguration('map')
+    localization_params = LaunchConfiguration('localization_params')
     software_rendering = LaunchConfiguration('software_rendering')
     start_nav2 = LaunchConfiguration('start_nav2')
     start_rviz = LaunchConfiguration('start_rviz')
@@ -80,6 +81,7 @@ def generate_launch_description():
         launch_arguments={
             'use_sim_time': 'true',
             'map': map_file,
+            'params': localization_params,
         }.items(),
         condition=UnlessCondition(slam),
     )
@@ -201,6 +203,13 @@ def generate_launch_description():
                     [navigation_share, 'maps', 'warehouse.yaml']
                 ),
                 description='Map YAML used when slam is false.',
+            ),
+            DeclareLaunchArgument(
+                'localization_params',
+                default_value=PathJoinSubstitution(
+                    [bringup_share, 'config', 'localization_stable.yaml']
+                ),
+                description='AMCL parameters used when slam is false.',
             ),
             simulator,
             delayed_navigation,
