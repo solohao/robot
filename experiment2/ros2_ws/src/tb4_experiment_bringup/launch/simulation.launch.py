@@ -35,6 +35,10 @@ def generate_launch_description():
     world = LaunchConfiguration('world')
     model = LaunchConfiguration('model')
     namespace = LaunchConfiguration('namespace')
+    x = LaunchConfiguration('x')
+    y = LaunchConfiguration('y')
+    z = LaunchConfiguration('z')
+    yaw = LaunchConfiguration('yaw')
     gz_args = LaunchConfiguration('gz_args')
     slam = LaunchConfiguration('slam')
     map_file = LaunchConfiguration('map')
@@ -62,6 +66,10 @@ def generate_launch_description():
                     'world': world,
                     'model': model,
                     'namespace': namespace,
+                    'x': x,
+                    'y': y,
+                    'z': z,
+                    'yaw': yaw,
                     'rviz': 'false',
                     'gz_args': gz_args,
                     'localization': 'false',
@@ -161,6 +169,26 @@ def generate_launch_description():
                 'namespace',
                 default_value='',
                 description='Robot namespace retained for delayed controllers.',
+            ),
+            DeclareLaunchArgument(
+                'x',
+                default_value='0.0',
+                description='Initial robot x position in the simulation world.',
+            ),
+            DeclareLaunchArgument(
+                'y',
+                default_value='0.0',
+                description='Initial robot y position in the simulation world.',
+            ),
+            DeclareLaunchArgument(
+                'z',
+                default_value='0.0',
+                description='Initial robot z position in the simulation world.',
+            ),
+            DeclareLaunchArgument(
+                'yaw',
+                default_value='0.0',
+                description='Initial robot yaw in the simulation world.',
             ),
             DeclareLaunchArgument(
                 'gz_args',

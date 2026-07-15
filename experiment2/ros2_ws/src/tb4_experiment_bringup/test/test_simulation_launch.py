@@ -13,9 +13,12 @@
 # limitations under the License.
 
 import importlib.util
+import math
 from pathlib import Path
 
+from geometry_msgs.msg import PoseStamped
 from launch.actions import DeclareLaunchArgument
+from nav_msgs.msg import Path as PathMessage
 
 
 def launch_arguments():
@@ -49,6 +52,11 @@ def test_localization_parameters_can_be_overridden():
     assert 'localization_params' in arguments
 
 
+def test_simulation_spawn_pose_can_be_overridden():
+    arguments = launch_arguments()
+    assert {'x', 'y', 'z', 'yaw'} <= arguments
+
+
 def test_extended_mapping_route_uses_velocity_smoother_input():
     script = (
         Path(__file__).parents[1]
@@ -56,3 +64,29 @@ def test_extended_mapping_route_uses_velocity_smoother_input():
         / 'run_extended_mapping_route.py'
     )
     assert "create_publisher(Twist, '/cmd_vel_nav', 10)" in script.read_text()
+
+
+def test_long_navigation_measures_obstacle_detour():
+    script = (
+        Path(__file__).parents[1]
+        / 'scripts'
+        / 'run_long_navigation.py'
+    )
+    spec = importlib.util.spec_from_file_location('run_long_navigation', script)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    path = PathMessage()
+    for x, y in ((0.0, 0.0), (1.0, 2.0), (2.0, 0.0)):
+        pose = PoseStamped()
+        path.poses.append(pose)
+        pose.pose.position.x = x
+        pose.pose.position.y = y
+
+    length, direct, ratio, deviation = module.path_detour_metrics(path, 2.0, 0.0)
+    assert math.isclose(length, 2.0 * math.sqrt(5.0))
+    assert math.isclose(direct, 2.0)
+    assert math.isclose(ratio, math.sqrt(5.0))
+    assert math.isclose(deviation, 2.0)

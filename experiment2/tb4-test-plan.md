@@ -3,8 +3,10 @@
  
 在 TurtleBot4 官方 warehouse 世界中，通过 RViz2 完成 AMCL 初始化，并通过
 Nav2 action 发送精确目标，证明 Humble 默认 `GridBased` 标识实际动态加载
-`tb4_astar_planner/AStarPlanner`，生成长度不少于 `12 m`、跨越多个货架区域的
-完整路径，并使
+`tb4_astar_planner/AStarPlanner`。机器人从大型纵向货架西侧
+`(3.5,-12.0,1.5708)` 出发，到达同一货架东侧 `(8.5,-12.0,0.0)`；起终点
+直线穿过货架，要求规划器生成长度不少于 `18 m`、绕行比不少于 `2.5`、最大横向
+绕行不少于 `5 m` 的完整路径，并使
 机器人到达目标、同一 action 进入 `SUCCEEDED (4)`。 
 
 
@@ -38,6 +40,15 @@ GPU 的 VMware 主机在完整传感器配置下难以稳定完成导航。仓�
 source /opt/ros/humble/setup.bash
 source experiment2/ros2_ws/install/setup.bash
 ros2 run tb4_experiment_bringup vmware_simulation start_nav2:=false
+```
+
+绕障验收实际启动命令为：
+
+```bash
+LOCALIZATION="$(ros2 pkg prefix tb4_experiment_bringup)/share/tb4_experiment_bringup/config/localization_obstacle_route.yaml"
+ros2 run tb4_experiment_bringup vmware_simulation \
+  start_nav2:=false x:=3.5 y:=-12.0 yaw:=1.5708 \
+  localization_params:="$LOCALIZATION"
 ```
 
 预设执行以下调整：
@@ -145,7 +156,8 @@ ros2 run tb4_experiment_bringup run_extended_mapping_route
  
 ### 1. AMCL 初始化
  
-1. 使用扩展地图启动 Gazebo、AMCL 和 RViz，暂不启动 Nav2。
+1. 使用官方 warehouse 静态地图，从 `(3.5,-12.0,1.5708)` 启动 Gazebo、
+   AMCL 和 RViz，暂不启动 Nav2。
 2. 最大化并聚焦 RViz2。
 3. 等待粒子云集中和 LaserScan 与地图边缘基本对齐。
 4. 运行：
@@ -203,7 +215,8 @@ planner GridBased is not a valid planner
 
    ```bash
    ros2 run tb4_experiment_bringup run_long_navigation \
-     --x -7.0 --y -10.0 --min-path-length 12.0 \
+     --x 8.5 --y -12.0 --min-path-length 18.0 \
+     --min-detour-ratio 2.5 --min-lateral-deviation 5.0 \
      --evidence "$HOME/long-navigation-result.json"
    ```
 
@@ -212,16 +225,19 @@ planner GridBased is not a valid planner
 通过标准：
 - pose 数量 `>= 3`；
 - 首 pose 与机器人起点距离 `<= 0.30 m`；
-- 末 pose 与目标 `(-7.0, -10.0)` 距离 `<= 0.35 m`；
-- 全局路径长度 `>= 12.0 m`；
-- RViz 红色全局路径跨越多个货架区域，不穿过灰色占用区或粉色膨胀区；
+- 末 pose 与目标 `(8.5, -12.0)` 距离 `<= 0.35 m`；
+- 全局路径长度 `>= 18.0 m`；
+- 路径长度/起终点直线距离 `>= 2.5`；
+- 相对起终点直线的最大横向偏移 `>= 5.0 m`；
+- RViz 红色全局路径从大型纵向货架一端绕至另一侧，不穿过灰色占用区或粉色
+  膨胀区；
 - `/plan` 发布者为 `planner_server`。
  ### 4. 导航终态
  保持 RViz2 和终端可见，目标发送后最多等待 1200 秒墙钟。
  
 通过标准：
  - 机器人沿红色全局路径和蓝色局部路径运动；
-- 机器人不进入 `shelf_7` 占用区、不发生可见碰撞；
+- 机器人不进入分隔起终点的大型货架占用区、不发生可见碰撞；
 - 不持续原地旋转，不进入恢复失败；
 - 同一 action 命令先显示 `Goal accepted`，最终显示
   `Goal finished with status: SUCCEEDED`；
