@@ -52,6 +52,34 @@ def path_length(message: PathMessage) -> float:
     )
 
 
+def path_detour_metrics(
+    message: PathMessage,
+    goal_x: float,
+    goal_y: float,
+) -> tuple[float, float, float, float]:
+    length = path_length(message)
+    start = message.poses[0].pose.position
+    direct_distance = math.hypot(goal_x - start.x, goal_y - start.y)
+    if direct_distance <= 1.0e-6:
+        return length, direct_distance, math.inf, 0.0
+
+    line_x = goal_x - start.x
+    line_y = goal_y - start.y
+    lateral_deviation = max(
+        abs(
+            line_y * (pose.pose.position.x - start.x)
+            - line_x * (pose.pose.position.y - start.y)
+        ) / direct_distance
+        for pose in message.poses
+    )
+    return (
+        length,
+        direct_distance,
+        length / direct_distance,
+        lateral_deviation,
+    )
+
+
 class LongNavigationRunner(Node):
 
     def __init__(self, arguments: argparse.Namespace) -> None:
@@ -67,6 +95,9 @@ class LongNavigationRunner(Node):
         self.goal_sent = False
         self.path_pose_count = 0
         self.path_length = None
+        self.direct_distance = None
+        self.detour_ratio = None
+        self.max_lateral_deviation = None
 
     def path_callback(self, message: PathMessage) -> None:
         if not self.goal_sent or not message.poses:
@@ -78,13 +109,23 @@ class LongNavigationRunner(Node):
         )
         if endpoint_error > 0.5:
             return
-        candidate_length = path_length(message)
+        (
+            candidate_length,
+            direct_distance,
+            detour_ratio,
+            lateral_deviation,
+        ) = path_detour_metrics(message, self.arguments.x, self.arguments.y)
         if self.path_length is None or candidate_length > self.path_length:
             self.path_length = candidate_length
             self.path_pose_count = len(message.poses)
+            self.direct_distance = direct_distance
+            self.detour_ratio = detour_ratio
+            self.max_lateral_deviation = lateral_deviation
             self.get_logger().info(
                 f'path received: poses={self.path_pose_count}, '
-                f'length={self.path_length:.3f} m'
+                f'length={self.path_length:.3f} m, '
+                f'detour_ratio={self.detour_ratio:.3f}, '
+                f'lateral_deviation={self.max_lateral_deviation:.3f} m'
             )
 
     def goal_message(self) -> NavigateToPose.Goal:
@@ -99,10 +140,12 @@ class LongNavigationRunner(Node):
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument('--x', type=float, default=-7.0)
-    parser.add_argument('--y', type=float, default=-10.0)
+    parser.add_argument('--x', type=float, default=8.5)
+    parser.add_argument('--y', type=float, default=-12.0)
     parser.add_argument('--yaw', type=float, default=0.0)
-    parser.add_argument('--min-path-length', type=float, default=12.0)
+    parser.add_argument('--min-path-length', type=float, default=18.0)
+    parser.add_argument('--min-detour-ratio', type=float, default=2.5)
+    parser.add_argument('--min-lateral-deviation', type=float, default=5.0)
     parser.add_argument('--timeout', type=float, default=1200.0)
     parser.add_argument(
         '--evidence',
@@ -127,6 +170,11 @@ def write_evidence(
         'minimum_path_length': arguments.min_path_length,
         'path_pose_count': runner.path_pose_count,
         'path_length': runner.path_length,
+        'direct_distance': runner.direct_distance,
+        'detour_ratio': runner.detour_ratio,
+        'minimum_detour_ratio': arguments.min_detour_ratio,
+        'max_lateral_deviation': runner.max_lateral_deviation,
+        'minimum_lateral_deviation': arguments.min_lateral_deviation,
         'wall_duration_seconds': wall_duration,
         'terminal_status': status,
         'terminal_status_label': STATUS_LABELS.get(status, str(status)),
@@ -165,14 +213,22 @@ def main() -> None:
 
         while rclpy.ok() and not result_future.done():
             rclpy.spin_once(runner, timeout_sec=0.2)
-            if (
+            path_failed = (
                 runner.path_length is not None
-                and runner.path_length < arguments.min_path_length
-                and not cancel_requested
-            ):
+                and (
+                    runner.path_length < arguments.min_path_length
+                    or runner.detour_ratio < arguments.min_detour_ratio
+                    or runner.max_lateral_deviation
+                    < arguments.min_lateral_deviation
+                )
+            )
+            if path_failed and not cancel_requested:
                 runner.get_logger().error(
-                    f'path is too short: {runner.path_length:.3f} m '
-                    f'< {arguments.min_path_length:.3f} m'
+                    'path does not demonstrate the required obstacle detour: '
+                    f'length={runner.path_length:.3f} m, '
+                    f'detour_ratio={runner.detour_ratio:.3f}, '
+                    'lateral_deviation='
+                    f'{runner.max_lateral_deviation:.3f} m'
                 )
                 goal_handle.cancel_goal_async()
                 cancel_requested = True
@@ -193,6 +249,8 @@ def main() -> None:
     path_passed = (
         runner.path_length is not None
         and runner.path_length >= arguments.min_path_length
+        and runner.detour_ratio >= arguments.min_detour_ratio
+        and runner.max_lateral_deviation >= arguments.min_lateral_deviation
     )
     if status != GoalStatus.STATUS_SUCCEEDED or not path_passed:
         raise SystemExit(
@@ -203,6 +261,8 @@ def main() -> None:
     print(
         '[PASS] Long navigation: '
         f'path_length={runner.path_length:.3f} m, '
+        f'detour_ratio={runner.detour_ratio:.3f}, '
+        f'lateral_deviation={runner.max_lateral_deviation:.3f} m, '
         f'wall_duration={wall_duration:.1f} s, status=SUCCEEDED'
     )
 

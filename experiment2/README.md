@@ -169,11 +169,16 @@ SLAM 证据只需展示地图随有效扫描增量扩展，不要求完整探索
 `lab_map` 用于证明建图与地图持久化；A* 端到端验证独立使用与 warehouse 世界匹配的
 官方静态地图，避免把未完整探索的局部地图当作全局导航地图。
 
-最终 VMware 复现采用分阶段启动。先启动 Gazebo、AMCL 和 RViz，不让 Nav2 在
-`map -> odom` 建立前激活：
+最终绕障复现采用分阶段启动。机器人从右侧大型纵向货架西侧
+`(3.5, -12.0, 1.5708)` 出生，目标位于同一货架东侧 `(8.5, -12.0, 0.0)`。
+起终点直线穿过货架占用区，因此全局路径必须从货架北端或南端绕行。先启动
+Gazebo、AMCL 和 RViz，不让 Nav2 在 `map -> odom` 建立前激活：
 
 ```bash
-ros2 run tb4_experiment_bringup vmware_simulation start_nav2:=false
+LOCALIZATION="$(ros2 pkg prefix tb4_experiment_bringup)/share/tb4_experiment_bringup/config/localization_obstacle_route.yaml"
+ros2 run tb4_experiment_bringup vmware_simulation \
+  start_nav2:=false x:=3.5 y:=-12.0 yaw:=1.5708 \
+  localization_params:="$LOCALIZATION"
 ```
 
 在 RViz 使用 `2D Pose Estimate` 后，以
@@ -193,9 +198,9 @@ Planner、Controller 与 BT Navigator 均为 `active [3]` 后再发送唯一目�
 Nav2，可显式传入 `start_nav2:=true`。软件渲染下仿真可能慢于现实时间，但只要
 `/clock` 持续推进，就不会改变使用仿真时间的 SLAM/Nav2 算法逻辑。
 
-助教验收版本默认使用 `localization_stable.yaml`。仿真出生点与地图原点均为
-`(0, 0, 0)`，AMCL 会从确定性初始位姿启动，并提高激光更新频率、启用 beam
-skipping。发送目标前必须运行：
+绕障验收使用 `localization_obstacle_route.yaml`，AMCL 初始位姿与仿真出生点
+`(3.5, -12.0, 1.5708)` 一致，并提高激光更新频率、启用 beam skipping。
+发送目标前必须运行：
 
 ```bash
 ros2 run tb4_experiment_bringup validate_localization_stability
@@ -211,13 +216,16 @@ ros2 run tb4_experiment_bringup validate_localization_stability
 
 ```bash
 ros2 run tb4_experiment_bringup run_long_navigation \
-  --x -7.0 --y -10.0 --min-path-length 12.0 \
+  --x 8.5 --y -12.0 --min-path-length 18.0 \
+  --min-detour-ratio 2.5 --min-lateral-deviation 5.0 \
   --evidence "$HOME/long-navigation-result.json"
 ```
 
-该命令拒绝短于 `12 m` 的全局路径，完整等待同一 action 到
-`SUCCEEDED`，并保存路径长度、位姿数、真实墙钟时长和终态。最终录屏必须从目标
-发送前开始，连续保留 RViz 与终端，直到终态输出；不得加速、抽帧或剪成一分钟摘要。
+该命令拒绝长度短于 `18 m`、路径长度/起终点直线距离小于 `2.5`，或最大横向绕行
+小于 `5 m` 的全局路径，完整等待同一 action 到 `SUCCEEDED`。JSON 同时保存路径
+长度、直线距离、绕行比、最大横向偏移、位姿数、真实墙钟时长和终态。最终录屏必须
+从目标发送前开始，连续保留 RViz 与终端，直到终态输出；不得加速、抽帧或剪成
+一分钟摘要。
 
 ## 实机运行
 
