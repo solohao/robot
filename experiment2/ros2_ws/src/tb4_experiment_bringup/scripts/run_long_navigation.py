@@ -23,11 +23,11 @@ import time
 
 from action_msgs.msg import GoalStatus
 from nav2_msgs.action import NavigateToPose
-from nav_msgs.msg import Path as PathMessage
+from nav_msgs.msg import OccupancyGrid, Path as PathMessage
 import rclpy
 from rclpy.action import ActionClient
 from rclpy.node import Node
-from rclpy.qos import QoSProfile, ReliabilityPolicy
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.utilities import remove_ros_args
 
 
@@ -80,6 +80,77 @@ def path_detour_metrics(
     )
 
 
+def grid_line(
+    start_x: int,
+    start_y: int,
+    goal_x: int,
+    goal_y: int,
+):
+    delta_x = abs(goal_x - start_x)
+    delta_y = -abs(goal_y - start_y)
+    step_x = 1 if start_x < goal_x else -1
+    step_y = 1 if start_y < goal_y else -1
+    error = delta_x + delta_y
+    x = start_x
+    y = start_y
+
+    while True:
+        yield x, y
+        if x == goal_x and y == goal_y:
+            break
+        doubled_error = 2 * error
+        if doubled_error >= delta_y:
+            error += delta_y
+            x += step_x
+        if doubled_error <= delta_x:
+            error += delta_x
+            y += step_y
+
+
+def direct_obstacle_segments(
+    occupancy_grid: OccupancyGrid,
+    start_x: float,
+    start_y: float,
+    goal_x: float,
+    goal_y: float,
+) -> int:
+    origin = occupancy_grid.info.origin
+    yaw = math.atan2(
+        2.0 * origin.orientation.w * origin.orientation.z,
+        1.0 - 2.0 * origin.orientation.z * origin.orientation.z,
+    )
+    cosine = math.cos(yaw)
+    sine = math.sin(yaw)
+
+    def world_to_grid(x: float, y: float) -> tuple[int, int]:
+        delta_x = x - origin.position.x
+        delta_y = y - origin.position.y
+        local_x = cosine * delta_x + sine * delta_y
+        local_y = -sine * delta_x + cosine * delta_y
+        return (
+            math.floor(local_x / occupancy_grid.info.resolution),
+            math.floor(local_y / occupancy_grid.info.resolution),
+        )
+
+    start = world_to_grid(start_x, start_y)
+    goal = world_to_grid(goal_x, goal_y)
+    segments = 0
+    inside_obstacle = False
+    for x, y in grid_line(*start, *goal):
+        in_bounds = (
+            0 <= x < occupancy_grid.info.width
+            and 0 <= y < occupancy_grid.info.height
+        )
+        occupied = (
+            in_bounds
+            and occupancy_grid.data[y * occupancy_grid.info.width + x] >= 65
+        )
+        if occupied and not inside_obstacle:
+            segments += 1
+        inside_obstacle = occupied
+    return segments
+
+
 class LongNavigationRunner(Node):
 
     def __init__(self, arguments: argparse.Namespace) -> None:
@@ -91,16 +162,32 @@ class LongNavigationRunner(Node):
             '/navigate_to_pose',
         )
         path_qos = QoSProfile(depth=5, reliability=ReliabilityPolicy.RELIABLE)
+        map_qos = QoSProfile(
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+        )
         self.create_subscription(PathMessage, '/plan', self.path_callback, path_qos)
+        self.create_subscription(
+            OccupancyGrid,
+            '/map',
+            self.map_callback,
+            map_qos,
+        )
+        self.static_map = None
         self.goal_sent = False
         self.path_pose_count = 0
         self.path_length = None
         self.direct_distance = None
         self.detour_ratio = None
         self.max_lateral_deviation = None
+        self.direct_obstacle_segments = None
+
+    def map_callback(self, message: OccupancyGrid) -> None:
+        self.static_map = message
 
     def path_callback(self, message: PathMessage) -> None:
-        if not self.goal_sent or not message.poses:
+        if not self.goal_sent or not message.poses or self.static_map is None:
             return
         endpoint = message.poses[-1].pose.position
         endpoint_error = math.hypot(
@@ -115,17 +202,27 @@ class LongNavigationRunner(Node):
             detour_ratio,
             lateral_deviation,
         ) = path_detour_metrics(message, self.arguments.x, self.arguments.y)
+        start = message.poses[0].pose.position
+        obstacle_segments = direct_obstacle_segments(
+            self.static_map,
+            start.x,
+            start.y,
+            self.arguments.x,
+            self.arguments.y,
+        )
         if self.path_length is None or candidate_length > self.path_length:
             self.path_length = candidate_length
             self.path_pose_count = len(message.poses)
             self.direct_distance = direct_distance
             self.detour_ratio = detour_ratio
             self.max_lateral_deviation = lateral_deviation
+            self.direct_obstacle_segments = obstacle_segments
             self.get_logger().info(
                 f'path received: poses={self.path_pose_count}, '
                 f'length={self.path_length:.3f} m, '
                 f'detour_ratio={self.detour_ratio:.3f}, '
-                f'lateral_deviation={self.max_lateral_deviation:.3f} m'
+                f'lateral_deviation={self.max_lateral_deviation:.3f} m, '
+                f'direct_obstacles={self.direct_obstacle_segments}'
             )
 
     def goal_message(self) -> NavigateToPose.Goal:
@@ -140,12 +237,13 @@ class LongNavigationRunner(Node):
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument('--x', type=float, default=8.5)
-    parser.add_argument('--y', type=float, default=-12.0)
+    parser.add_argument('--x', type=float, default=0.4)
+    parser.add_argument('--y', type=float, default=-10.5)
     parser.add_argument('--yaw', type=float, default=0.0)
-    parser.add_argument('--min-path-length', type=float, default=18.0)
-    parser.add_argument('--min-detour-ratio', type=float, default=2.5)
-    parser.add_argument('--min-lateral-deviation', type=float, default=5.0)
+    parser.add_argument('--min-path-length', type=float, default=22.0)
+    parser.add_argument('--min-detour-ratio', type=float, default=1.8)
+    parser.add_argument('--min-lateral-deviation', type=float, default=6.0)
+    parser.add_argument('--min-direct-obstacles', type=int, default=2)
     parser.add_argument('--timeout', type=float, default=1200.0)
     parser.add_argument(
         '--evidence',
@@ -175,6 +273,8 @@ def write_evidence(
         'minimum_detour_ratio': arguments.min_detour_ratio,
         'max_lateral_deviation': runner.max_lateral_deviation,
         'minimum_lateral_deviation': arguments.min_lateral_deviation,
+        'direct_obstacle_segments': runner.direct_obstacle_segments,
+        'minimum_direct_obstacles': arguments.min_direct_obstacles,
         'wall_duration_seconds': wall_duration,
         'terminal_status': status,
         'terminal_status_label': STATUS_LABELS.get(status, str(status)),
@@ -196,6 +296,12 @@ def main() -> None:
         runner.get_logger().info('waiting for /navigate_to_pose')
         if not runner.action_client.wait_for_server(timeout_sec=120.0):
             raise SystemExit('NavigateToPose action server is unavailable')
+
+        map_deadline = time.monotonic() + 30.0
+        while runner.static_map is None and time.monotonic() < map_deadline:
+            rclpy.spin_once(runner, timeout_sec=0.2)
+        if runner.static_map is None:
+            raise SystemExit('Static occupancy map is unavailable')
 
         send_future = runner.action_client.send_goal_async(runner.goal_message())
         rclpy.spin_until_future_complete(runner, send_future)
@@ -220,6 +326,8 @@ def main() -> None:
                     or runner.detour_ratio < arguments.min_detour_ratio
                     or runner.max_lateral_deviation
                     < arguments.min_lateral_deviation
+                    or runner.direct_obstacle_segments
+                    < arguments.min_direct_obstacles
                 )
             )
             if path_failed and not cancel_requested:
@@ -228,7 +336,8 @@ def main() -> None:
                     f'length={runner.path_length:.3f} m, '
                     f'detour_ratio={runner.detour_ratio:.3f}, '
                     'lateral_deviation='
-                    f'{runner.max_lateral_deviation:.3f} m'
+                    f'{runner.max_lateral_deviation:.3f} m, '
+                    f'direct_obstacles={runner.direct_obstacle_segments}'
                 )
                 goal_handle.cancel_goal_async()
                 cancel_requested = True
@@ -251,6 +360,7 @@ def main() -> None:
         and runner.path_length >= arguments.min_path_length
         and runner.detour_ratio >= arguments.min_detour_ratio
         and runner.max_lateral_deviation >= arguments.min_lateral_deviation
+        and runner.direct_obstacle_segments >= arguments.min_direct_obstacles
     )
     if status != GoalStatus.STATUS_SUCCEEDED or not path_passed:
         raise SystemExit(
@@ -263,6 +373,7 @@ def main() -> None:
         f'path_length={runner.path_length:.3f} m, '
         f'detour_ratio={runner.detour_ratio:.3f}, '
         f'lateral_deviation={runner.max_lateral_deviation:.3f} m, '
+        f'direct_obstacles={runner.direct_obstacle_segments}, '
         f'wall_duration={wall_duration:.1f} s, status=SUCCEEDED'
     )
 

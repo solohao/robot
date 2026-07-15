@@ -18,7 +18,7 @@ from pathlib import Path
 
 from geometry_msgs.msg import PoseStamped
 from launch.actions import DeclareLaunchArgument
-from nav_msgs.msg import Path as PathMessage
+from nav_msgs.msg import OccupancyGrid, Path as PathMessage
 
 
 def launch_arguments():
@@ -90,3 +90,36 @@ def test_long_navigation_measures_obstacle_detour():
     assert math.isclose(direct, 2.0)
     assert math.isclose(ratio, math.sqrt(5.0))
     assert math.isclose(deviation, 2.0)
+
+
+def test_long_navigation_counts_two_direct_obstacles():
+    script = (
+        Path(__file__).parents[1]
+        / 'scripts'
+        / 'run_long_navigation.py'
+    )
+    spec = importlib.util.spec_from_file_location('run_long_navigation', script)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    occupancy_grid = OccupancyGrid()
+    occupancy_grid.info.resolution = 1.0
+    occupancy_grid.info.width = 5
+    occupancy_grid.info.height = 3
+    occupancy_grid.info.origin.orientation.w = 1.0
+    occupancy_grid.data = [
+        0, 0, 0, 0, 0,
+        0, 100, 0, 100, 0,
+        0, 0, 0, 0, 0,
+    ]
+
+    segments = module.direct_obstacle_segments(
+        occupancy_grid,
+        0.5,
+        1.5,
+        4.5,
+        1.5,
+    )
+    assert segments == 2
