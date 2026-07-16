@@ -1,28 +1,48 @@
-# 实验报告
+# 实验二报告
 
-本目录提供仿真部分的专业实验报告和可复现生成链路：
+本目录生成《TurtleBot4 移动机器人自主导航与避障》完整实验报告：
 
-- `report.tex`：唯一报告内容源；
-- `实验二-TurtleBot4自主导航仿真-实验报告.pdf`：XeLaTeX 排版 PDF；
-- `实验二-TurtleBot4自主导航仿真-实验报告.docx`：由 Pandoc 从 LaTeX 转换的 Word；
-- `reference.docx`：Word 中文字体、标题、页边距、页眉与页码样式；
-- `generate_figures.py`：根据客观 JSON 数据生成系统架构、SLAM 指标和 A* 路径图；
-- `make_reference_docx.py`、`polish_docx.py`：生成并完善 Word 样式、目录和图表编号；
-- `data/astar-plan.yaml`、`data/path.json`：改进前短路径基线的原始消息与摘要；
-- `data/acceptance-summary.json`：扩展 SLAM、定位稳定性、长距离 action 与视频验收数据；
-- `data/action.json`、`data/final-distance.json`：目标 UUID、终态和目标容差证据；
-- `data/navigation-clock.json`：120 秒 `/clock` 与有效 `/scan` 启动验证摘要；
-- `data/slam-*.json`：独立 SLAM 增量建图流程数据；
-- `figures/`：RViz 截图及报告图表。
+- `report.tex`：报告内容源，包含已完成的计算机仿真和待填写的实地实验模板；
+- `template/实验报告模板.docx`：用户提供的浙江大学实验报告模板；
+- `extract_template_assets.py`：通过 OpenXML 读取模板页面参数、字段标签和校名字；
+- `build_report_docx.py`：保留模板前两页团队信息结构，并将 Pandoc 正文合并为 Word；
+- `generate_figures.py`：从原始路径、JSON、时钟和视频数据独立复算并生成图表；
+- `data/red-blue/`：红点到蓝点运行的原始路径、日志和验收证据；
+- `figures/red_blue_*.png`：红蓝点路线图、指标图和五张原始运行截图。
 
-生成命令：
+当前仿真结果为：
+
+| 项目 | 结果 |
+|---|---:|
+| 起点 | `(-11.25, -10.50)` |
+| 目标 | `(0.40, -10.50)` |
+| 路径位姿 | `787` |
+| 路径长度 | `24.489 m` |
+| 绕行比 | `2.102` |
+| 最大横向绕行 | `7.055 m` |
+| 直线占用区段 | `4` |
+| action 终态 | `SUCCEEDED (4)` |
+| action 墙钟时长 | `1248.075 s` |
+
+实地实验尚未执行。报告中的实体设备、现场路线、误差、成功率、照片和视频字段均
+明确标记为“待实测填写”，没有使用仿真数据代替实测数据。
+
+## 生成
+
+Ubuntu 22.04：
 
 ```bash
-sudo apt install pandoc texlive-xetex texlive-lang-chinese python3-docx
-make all
+sudo apt install pandoc libreoffice-writer poppler-utils python3-docx python3-lxml
+make docx
+make pdf
 ```
 
-Word 报告包含静态页码目录，适合直接编辑和提交。封面个人信息仍为占位符，提交前
-必须填写；正文变化后需同步更新目录页码。最新版报告已整合 5.00 m 扩展 SLAM、
-58,506 个已知栅格增量、0.965 激光地图匹配率、13.460 m 长路径及 443.934 s
-无加速视频证据。
+输出文件：
+
+```text
+实验二-TurtleBot4自主导航与避障-完整实验报告.docx
+实验二-TurtleBot4自主导航与避障-完整实验报告.pdf
+```
+
+封面和第二页团队信息保持空白占位符，提交前填写组号、姓名、院系、专业、学号、
+指导老师、日期、地点和同组学生姓名。

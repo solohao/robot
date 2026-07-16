@@ -6,6 +6,7 @@ report/report.aux
 report/report.log
 report/report.out
 report/report.pdf
+experiment2/report/.build/
 
 # ROS 2 workspace build products
 experiment2/ros2_ws/build/

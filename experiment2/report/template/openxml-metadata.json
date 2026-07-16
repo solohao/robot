@@ -1,0 +1,39 @@
+{
+  "source": "template/实验报告模板.docx",
+  "logo_relationship": "rId7",
+  "logo_package_path": "word/media/image1.png",
+  "page_twips": {
+    "width": 11906,
+    "height": 16838
+  },
+  "margins_twips": {
+    "top": 1440,
+    "right": 1800,
+    "bottom": 1440,
+    "left": 1800,
+    "header": 851,
+    "footer": 992
+  },
+  "default_fonts": {
+    "ascii": "Times New Roman",
+    "eastAsia": "宋体",
+    "hAnsi": "Times New Roman",
+    "cs": "Times New Roman"
+  },
+  "preserved_field_labels": [
+    "组号：",
+    "本科实验报告",
+    "课程名称：",
+    "指导老师：",
+    "选课时间：",
+    "专业：",
+    "姓名：",
+    "学号：",
+    "日期：",
+    "地点：",
+    "实验报告",
+    "实验名称：",
+    "实验类型：",
+    "同组学生姓名："
+  ]
+}

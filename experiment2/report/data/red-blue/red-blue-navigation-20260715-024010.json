@@ -1,0 +1,20 @@
+{
+  "goal": {
+    "x": 0.4,
+    "y": -10.5,
+    "yaw": 0.0
+  },
+  "minimum_path_length": 22.0,
+  "path_pose_count": 787,
+  "path_length": 24.48884260874853,
+  "direct_distance": 11.649999999974424,
+  "detour_ratio": 2.1020465758628575,
+  "minimum_detour_ratio": 1.8,
+  "max_lateral_deviation": 7.05499951820906,
+  "minimum_lateral_deviation": 6.0,
+  "direct_obstacle_segments": 4,
+  "minimum_direct_obstacles": 2,
+  "wall_duration_seconds": 1248.0754287250002,
+  "terminal_status": 4,
+  "terminal_status_label": "SUCCEEDED"
+}
