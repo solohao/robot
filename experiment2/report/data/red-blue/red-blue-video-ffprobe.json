@@ -1,0 +1,20 @@
+{
+    "programs": [
+
+    ],
+    "streams": [
+        {
+            "codec_name": "h264",
+            "r_frame_rate": "15/1",
+            "avg_frame_rate": "5012250/334151"
+        },
+        {
+            "codec_name": "mov_text",
+            "r_frame_rate": "0/0",
+            "avg_frame_rate": "0/0"
+        }
+    ],
+    "format": {
+        "duration": "1336.604000"
+    }
+}

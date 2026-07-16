@@ -1,389 +1,410 @@
 #!/usr/bin/env python3
 
 import json
+import math
+import re
 from pathlib import Path
 
+import matplotlib
+import numpy as np
+import yaml
+
+matplotlib.use("Agg")
+
 import matplotlib.pyplot as plt
-from matplotlib import font_manager
-from matplotlib.patches import FancyBboxPatch, Rectangle
-from PIL import Image
+from matplotlib.patches import FancyBboxPatch
 
 
-HERE = Path(__file__).resolve().parent
-DATA = HERE / "data"
-FIGURES = HERE / "figures"
-MAPS = HERE.parent / "maps"
+ROOT = Path(__file__).resolve().parent
+DATA = ROOT / "data" / "red-blue"
+FIGURES = ROOT / "figures"
+NAVIGATION = DATA / "red-blue-navigation-20260715-024010.json"
+PLAN = DATA / "red-blue-plan-20260715-024010.yaml"
+CLOCK = DATA / "red-blue-clock-stability.log"
+
+plt.rcParams.update(
+    {
+        "font.family": "sans-serif",
+        "font.sans-serif": [
+            "WenQuanYi Zen Hei",
+            "Noto Sans CJK SC",
+            "DejaVu Sans",
+        ],
+        "axes.unicode_minus": False,
+        "figure.dpi": 160,
+        "savefig.dpi": 220,
+    }
+)
 
 
-def configure_style():
-    candidates = [
-        "Noto Sans CJK SC",
-        "WenQuanYi Zen Hei",
-        "Droid Sans Fallback",
-        "DejaVu Sans",
+def load_evidence():
+    navigation = json.loads(NAVIGATION.read_text(encoding="utf-8"))
+    documents = [
+        document
+        for document in yaml.safe_load_all(PLAN.read_text(encoding="utf-8"))
+        if document
     ]
-    available = {font.name for font in font_manager.fontManager.ttflist}
-    font = next(name for name in candidates if name in available)
-    plt.rcParams.update(
-        {
-            "font.family": font,
-            "axes.unicode_minus": False,
-            "figure.dpi": 160,
-            "savefig.dpi": 220,
-            "axes.titleweight": "bold",
-            "axes.edgecolor": "#374151",
-            "axes.labelcolor": "#111827",
-            "xtick.color": "#374151",
-            "ytick.color": "#374151",
-        }
-    )
+    if len(documents) != 1:
+        raise ValueError(f"expected one non-empty plan document, got {len(documents)}")
 
-
-def add_box(ax, x, y, width, height, text, facecolor, edgecolor="#1f2937"):
-    patch = FancyBboxPatch(
-        (x, y),
-        width,
-        height,
-        boxstyle="round,pad=0.018,rounding_size=0.025",
-        facecolor=facecolor,
-        edgecolor=edgecolor,
-        linewidth=1.3,
-    )
-    ax.add_patch(patch)
-    ax.text(
-        x + width / 2,
-        y + height / 2,
-        text,
-        ha="center",
-        va="center",
-        fontsize=9.5,
-        color="#111827",
-        linespacing=1.25,
-    )
-
-
-def add_arrow(ax, start, end, label=""):
-    ax.annotate(
-        "",
-        xy=end,
-        xytext=start,
-        arrowprops={"arrowstyle": "-|>", "lw": 1.35, "color": "#374151"},
-    )
-    if label:
-        ax.text(
-            (start[0] + end[0]) / 2,
-            (start[1] + end[1]) / 2 + 0.018,
-            label,
-            ha="center",
-            va="bottom",
-            fontsize=7.5,
-            color="#4b5563",
+    positions = [
+        (
+            pose["pose"]["position"]["x"],
+            pose["pose"]["position"]["y"],
         )
-
-
-def architecture():
-    fig, ax = plt.subplots(figsize=(11.0, 6.2))
-    ax.set_xlim(0, 1)
-    ax.set_ylim(0, 1)
-    ax.axis("off")
-
-    blue = "#dbeafe"
-    green = "#dcfce7"
-    amber = "#fef3c7"
-    purple = "#ede9fe"
-    rose = "#ffe4e6"
-
-    add_box(ax, 0.035, 0.37, 0.17, 0.24, "Ignition Gazebo\nwarehouse 世界\nTurtleBot4 物理与传感器", blue)
-    add_box(ax, 0.26, 0.70, 0.17, 0.15, "SLAM Toolbox\n增量建图", green)
-    add_box(ax, 0.26, 0.42, 0.17, 0.15, "AMCL + Map Server\n静态地图自定位", green)
-    add_box(ax, 0.26, 0.14, 0.17, 0.15, "RViz2\n初始位姿、目标与可视化", purple)
-    add_box(ax, 0.49, 0.42, 0.15, 0.15, "Nav2\nBT Navigator", amber)
-    add_box(ax, 0.70, 0.68, 0.19, 0.16, "Planner Server\n自定义代价感知 A*", rose)
-    add_box(ax, 0.70, 0.41, 0.19, 0.16, "Controller Server\nDWB 局部控制", rose)
-    add_box(ax, 0.70, 0.14, 0.19, 0.16, "Velocity Smoother\n/cmd_vel_nav → /cmd_vel", rose)
-
-    add_arrow(ax, (0.205, 0.54), (0.26, 0.765), "/scan, /odom, /tf")
-    add_arrow(ax, (0.205, 0.49), (0.26, 0.495), "/scan, /odom")
-    add_arrow(ax, (0.205, 0.43), (0.26, 0.215), "状态与地图")
-    add_arrow(ax, (0.43, 0.495), (0.49, 0.495), "map→odom")
-    add_arrow(ax, (0.43, 0.215), (0.49, 0.455), "/goal")
-    add_arrow(ax, (0.64, 0.505), (0.70, 0.755), "ComputePath")
-    add_arrow(ax, (0.795, 0.68), (0.795, 0.57), "/plan")
-    add_arrow(ax, (0.795, 0.41), (0.795, 0.30), "/cmd_vel_nav")
-    add_arrow(ax, (0.70, 0.22), (0.205, 0.39), "/cmd_vel")
-    add_arrow(ax, (0.43, 0.775), (0.49, 0.55), "/map")
-
-    ax.text(
-        0.5,
-        0.94,
-        "TurtleBot4 仿真自主导航系统架构",
-        ha="center",
-        fontsize=16,
-        fontweight="bold",
-        color="#111827",
+        for pose in documents[0]["poses"]
+    ]
+    length = sum(
+        math.hypot(x2 - x1, y2 - y1)
+        for (x1, y1), (x2, y2) in zip(positions, positions[1:])
     )
-    ax.text(
-        0.5,
-        0.02,
-        "所有节点使用 ROS 2 Humble；仿真模式统一使用 Gazebo 发布的 /clock。",
-        ha="center",
-        fontsize=9,
-        color="#4b5563",
-    )
-    fig.tight_layout()
-    fig.savefig(FIGURES / "system_architecture.png", bbox_inches="tight")
+    start = positions[0]
+    goal = positions[-1]
+    direct = math.hypot(goal[0] - start[0], goal[1] - start[1])
+    dx = goal[0] - start[0]
+    dy = goal[1] - start[1]
+    deviations = [
+        abs(dy * (x - start[0]) - dx * (y - start[1])) / direct
+        for x, y in positions
+    ]
+
+    checks = {
+        "path_pose_count": len(positions),
+        "path_length": length,
+        "direct_distance": direct,
+        "detour_ratio": length / direct,
+        "max_lateral_deviation": max(deviations),
+    }
+    for key, calculated in checks.items():
+        recorded = navigation[key]
+        tolerance = 0 if key == "path_pose_count" else 1e-9
+        if abs(calculated - recorded) > tolerance:
+            raise ValueError(
+                f"{key} mismatch: calculated={calculated}, recorded={recorded}"
+            )
+
+    clock_rates = [
+        float(value)
+        for value in re.findall(
+            r"average rate:\s*([0-9.]+)", CLOCK.read_text(encoding="utf-8")
+        )
+    ]
+    if not clock_rates:
+        raise ValueError("no clock rates found")
+    return navigation, positions, deviations, clock_rates
+
+
+def save_figure(fig, name):
+    FIGURES.mkdir(parents=True, exist_ok=True)
+    fig.savefig(FIGURES / name, bbox_inches="tight", facecolor="white")
     plt.close(fig)
 
 
-def slam_metrics():
-    data = json.loads((DATA / "slam-summary.json").read_text())
-    initial = data["known_cells_initial"]
-    final = data["known_cells_final"]
-    displacement = data["odom_displacement"]
+def draw_route(navigation, positions, deviations):
+    xy = np.asarray(positions)
+    start = xy[0]
+    goal = xy[-1]
+    farthest_index = int(np.argmax(deviations))
+    farthest = xy[farthest_index]
 
-    fig, axes = plt.subplots(1, 2, figsize=(10.5, 4.2))
-    colors = ["#93c5fd", "#2563eb"]
-    bars = axes[0].bar(["运动前", "运动后"], [initial, final], color=colors, width=0.56)
-    axes[0].set_title("SLAM 已知栅格数量增长")
-    axes[0].set_ylabel("已知栅格数 / cell")
-    axes[0].grid(axis="y", alpha=0.2)
-    for bar, value in zip(bars, [initial, final]):
-        axes[0].text(
-            bar.get_x() + bar.get_width() / 2,
-            value + 350,
-            f"{value:,}",
-            ha="center",
-            fontsize=10,
-        )
-    axes[0].text(
-        0.5,
-        0.06,
-        f"增量：+{final - initial:,} cells",
-        transform=axes[0].transAxes,
-        ha="center",
-        fontsize=10,
-        color="#1d4ed8",
-        fontweight="bold",
+    fig, ax = plt.subplots(figsize=(9.2, 6.0))
+    ax.plot(
+        xy[:, 0],
+        xy[:, 1],
+        color="#E69F00",
+        linewidth=2.5,
+        label="A* 全局路径",
+        zorder=3,
     )
-
-    axes[1].barh(["里程计位移"], [displacement], color="#10b981", height=0.38)
-    axes[1].axvline(0.50, color="#dc2626", linestyle="--", linewidth=1.4, label="验收阈值 0.50 m")
-    axes[1].set_xlim(0, 0.65)
-    axes[1].set_xlabel("位移 / m")
-    axes[1].set_title("建图运动位移")
-    axes[1].grid(axis="x", alpha=0.2)
-    axes[1].legend(loc="lower right", frameon=False)
-    axes[1].text(
-        displacement - 0.01,
-        0,
-        f"{displacement:.3f} m",
-        ha="right",
-        va="center",
-        color="white",
-        fontsize=10,
-        fontweight="bold",
+    ax.plot(
+        [start[0], goal[0]],
+        [start[1], goal[1]],
+        linestyle="--",
+        color="#6B7280",
+        linewidth=1.8,
+        label="起终点直线",
+        zorder=2,
     )
-    fig.suptitle("增量建图客观指标", fontsize=15, fontweight="bold", y=1.02)
-    fig.tight_layout()
-    fig.savefig(FIGURES / "slam_metrics.png", bbox_inches="tight")
-    plt.close(fig)
-
-
-def path_plot():
-    data = json.loads((DATA / "path.json").read_text())
-    xs = [point[0] for point in data["coordinates"]]
-    ys = [point[1] for point in data["coordinates"]]
-    start = data["start"]
-    goal = data["end"]
-
-    fig, ax = plt.subplots(figsize=(7.4, 7.0))
-    forbidden = Rectangle(
-        (-1.9, -2.3),
-        3.6,
-        0.6,
-        facecolor="#fecaca",
-        edgecolor="#dc2626",
-        linewidth=1.5,
-        alpha=0.65,
-        label="shelf_7 占用带判定区域",
+    ax.scatter(
+        [start[0]],
+        [start[1]],
+        s=125,
+        color="#D55E00",
+        edgecolor="white",
+        linewidth=1.2,
+        label="红点起点",
+        zorder=5,
     )
-    ax.add_patch(forbidden)
-    ax.plot(xs, ys, color="#2563eb", linewidth=2.4, label="A* 全局路径")
-    ax.scatter([start[0]], [start[1]], s=85, marker="o", color="#16a34a", zorder=5, label="起点")
-    ax.scatter([goal[0]], [goal[1]], s=105, marker="*", color="#dc2626", zorder=5, label="目标")
+    ax.scatter(
+        [goal[0]],
+        [goal[1]],
+        s=125,
+        color="#0072B2",
+        edgecolor="white",
+        linewidth=1.2,
+        label="蓝点目标",
+        zorder=5,
+    )
+    ax.scatter(
+        [farthest[0]],
+        [farthest[1]],
+        s=70,
+        color="#009E73",
+        zorder=5,
+    )
     ax.annotate(
-        f"最大横向绕行 |x|={data['max_abs_x']:.3f} m",
-        xy=(-data["max_abs_x"], -2.0),
-        xytext=(-3.25, -1.15),
-        arrowprops={"arrowstyle": "->", "color": "#374151"},
+        f"最大横向绕行 {navigation['max_lateral_deviation']:.3f} m",
+        xy=farthest,
+        xytext=(18, 16),
+        textcoords="offset points",
+        arrowprops={"arrowstyle": "->", "color": "#009E73"},
+        fontsize=10,
+        color="#065F46",
+    )
+    ax.annotate(
+        f"起点\n({start[0]:.2f}, {start[1]:.2f})",
+        start,
+        xytext=(-72, -44),
+        textcoords="offset points",
         fontsize=9,
     )
-    ax.set_title("代价感知 A* 全局路径与 shelf_7 绕障结果")
+    ax.annotate(
+        f"目标\n({goal[0]:.2f}, {goal[1]:.2f})",
+        goal,
+        xytext=(12, -40),
+        textcoords="offset points",
+        fontsize=9,
+    )
+    ax.set_title("红点至蓝点双货架绕行路线", fontsize=15, weight="bold")
     ax.set_xlabel("地图坐标 x / m")
     ax.set_ylabel("地图坐标 y / m")
-    ax.set_aspect("equal", adjustable="box")
-    ax.grid(alpha=0.22)
-    ax.legend(loc="lower left", frameon=True)
+    ax.grid(True, color="#D1D5DB", linewidth=0.7, alpha=0.75)
+    ax.axis("equal")
+    ax.legend(loc="best", frameon=True)
     ax.text(
-        0.98,
-        0.98,
-        f"路径点：{data['pose_count']}\n长度：{data['path_length']:.3f} m\n占用带违规：0",
+        0.01,
+        0.01,
+        (
+            f"路径 {navigation['path_length']:.3f} m · "
+            f"直线 {navigation['direct_distance']:.3f} m · "
+            f"绕行比 {navigation['detour_ratio']:.3f} · "
+            f"直线穿过占用区 {navigation['direct_obstacle_segments']} 段"
+        ),
         transform=ax.transAxes,
-        ha="right",
-        va="top",
-        fontsize=9,
-        bbox={"boxstyle": "round", "facecolor": "white", "alpha": 0.9, "edgecolor": "#9ca3af"},
+        fontsize=9.5,
+        bbox={"boxstyle": "round,pad=0.4", "facecolor": "#F9FAFB", "alpha": 0.95},
     )
-    fig.tight_layout()
-    fig.savefig(FIGURES / "astar_path_metrics.png", bbox_inches="tight")
-    plt.close(fig)
+    save_figure(fig, "red_blue_route.png")
 
 
-def acceptance_improvements():
-    data = json.loads((DATA / "acceptance-summary.json").read_text())
-    previous = data["previous_baseline"]
-    slam = data["slam_coverage"]
-    navigation = data["navigation"]
-
-    fig, axes = plt.subplots(1, 3, figsize=(12.5, 4.4))
-    entries = [
-        (
-            axes[0],
-            "SLAM 累计行程",
-            previous["slam_distance"],
-            slam["distance"],
-            slam["minimum_distance"],
-            "m",
-        ),
-        (
-            axes[1],
-            "已知栅格增量",
-            previous["known_cell_delta"],
-            slam["known_cell_delta"],
-            slam["minimum_known_cell_delta"],
-            "cell",
-        ),
-        (
-            axes[2],
-            "A* 全局路径长度",
-            previous["path_length"],
+def draw_acceptance_metrics(navigation):
+    labels = ["路径长度", "绕行比", "横向绕行", "占用区段"]
+    actual = np.asarray(
+        [
             navigation["path_length"],
+            navigation["detour_ratio"],
+            navigation["max_lateral_deviation"],
+            navigation["direct_obstacle_segments"],
+        ]
+    )
+    thresholds = np.asarray(
+        [
             navigation["minimum_path_length"],
-            "m",
-        ),
-    ]
-    for axis, title, baseline, improved, threshold, unit in entries:
-        bars = axis.bar(
-            ["改进前", "改进后"],
-            [baseline, improved],
-            color=["#94a3b8", "#2563eb"],
-            width=0.58,
+            navigation["minimum_detour_ratio"],
+            navigation["minimum_lateral_deviation"],
+            navigation["minimum_direct_obstacles"],
+        ]
+    )
+    units = ["m", "", "m", "段"]
+    normalized = actual / thresholds
+
+    fig, ax = plt.subplots(figsize=(8.8, 4.8))
+    y = np.arange(len(labels))
+    ax.barh(y, normalized, color="#009E73", height=0.56)
+    ax.axvline(1.0, color="#D55E00", linestyle="--", linewidth=1.8, label="验收门槛")
+    ax.set_yticks(y, labels)
+    ax.invert_yaxis()
+    ax.set_xlabel("实测值 / 验收门槛")
+    ax.set_xlim(0, max(normalized) * 1.22)
+    ax.grid(axis="x", color="#D1D5DB", linewidth=0.7, alpha=0.75)
+    ax.set_title("红蓝点路径四项几何断言全部通过", fontsize=15, weight="bold")
+    for index, (ratio, value, threshold, unit) in enumerate(
+        zip(normalized, actual, thresholds, units)
+    ):
+        suffix = f" {unit}" if unit else ""
+        ax.text(
+            ratio + 0.025,
+            index,
+            f"{value:.3f}{suffix} / {threshold:g}{suffix}",
+            va="center",
+            fontsize=9.5,
         )
-        axis.axhline(
-            threshold,
-            color="#dc2626",
-            linestyle="--",
-            linewidth=1.3,
-            label=f"验收阈值 {threshold:g} {unit}",
+    ax.legend(loc="lower right")
+    save_figure(fig, "red_blue_acceptance_metrics.png")
+
+
+def draw_clock_stability(clock_rates):
+    samples = np.arange(1, len(clock_rates) + 1)
+    fig, ax = plt.subplots(figsize=(8.8, 4.4))
+    ax.plot(samples, clock_rates, marker="o", color="#0072B2", linewidth=2.2)
+    ax.axhline(20.0, color="#009E73", linestyle="--", linewidth=1.5, label="目标 20 Hz")
+    ax.fill_between(
+        [0.7, len(clock_rates) + 0.3],
+        19.9,
+        20.1,
+        color="#009E73",
+        alpha=0.12,
+        label="19.9–20.1 Hz",
+    )
+    for x, rate in zip(samples, clock_rates):
+        ax.text(x, rate + 0.008, f"{rate:.3f}", ha="center", fontsize=9)
+    ax.set_xlim(0.7, len(clock_rates) + 0.3)
+    ax.set_ylim(min(clock_rates) - 0.04, max(clock_rates) + 0.05)
+    ax.set_xticks(samples, [f"窗口 {sample}" for sample in samples])
+    ax.set_ylabel("/clock 平均频率 / Hz")
+    ax.set_title("世界加载完成后的仿真时钟稳定在约 20 Hz", fontsize=15, weight="bold")
+    ax.grid(axis="y", color="#D1D5DB", linewidth=0.7, alpha=0.75)
+    ax.legend(loc="lower right")
+    save_figure(fig, "red_blue_clock_stability.png")
+
+
+def draw_runtime_summary(navigation):
+    action_minutes = navigation["wall_duration_seconds"] / 60.0
+    video_minutes = 1336.604 / 60.0
+    fig, ax = plt.subplots(figsize=(8.8, 4.6))
+    labels = ["NavigateToPose action", "完整连续视频"]
+    values = [action_minutes, video_minutes]
+    colors = ["#0072B2", "#56B4E9"]
+    bars = ax.barh(labels, values, color=colors, height=0.52)
+    ax.invert_yaxis()
+    ax.set_xlabel("墙钟时长 / min")
+    ax.set_title("同一 action 成功完成，视频覆盖完整运行区间", fontsize=15, weight="bold")
+    ax.grid(axis="x", color="#D1D5DB", linewidth=0.7, alpha=0.75)
+    for bar, value in zip(bars, values):
+        ax.text(
+            value + 0.18,
+            bar.get_y() + bar.get_height() / 2,
+            f"{value:.2f} min",
+            va="center",
+            fontsize=10,
         )
-        axis.set_title(title)
-        axis.set_ylabel(unit)
-        axis.grid(axis="y", alpha=0.2)
-        axis.legend(frameon=False, fontsize=8)
-        for bar, value in zip(bars, [baseline, improved]):
-            label = f"{value:,.3f}" if unit == "m" else f"{value:,.0f}"
-            axis.text(
-                bar.get_x() + bar.get_width() / 2,
-                bar.get_height(),
-                label,
-                ha="center",
-                va="bottom",
-                fontsize=9,
-                fontweight="bold",
-            )
-    fig.suptitle("针对助教反馈的量化改进对比", fontsize=15, fontweight="bold", y=1.02)
-    fig.tight_layout()
-    fig.savefig(FIGURES / "acceptance_improvements.png", bbox_inches="tight")
-    plt.close(fig)
+    ax.text(
+        0.02,
+        0.08,
+        "终态：SUCCEEDED (4)；视频 H.264，15 fps，1336.604 s",
+        transform=ax.transAxes,
+        fontsize=10,
+        bbox={"boxstyle": "round,pad=0.4", "facecolor": "#ECFDF5"},
+    )
+    ax.set_xlim(0, max(values) * 1.18)
+    save_figure(fig, "red_blue_runtime_summary.png")
 
 
-def localization_acceptance():
-    data = json.loads((DATA / "acceptance-summary.json").read_text())
-    localization = data["localization_stability"]
-    navigation = data["navigation"]
-    video = data["video"]
-
-    fig, axes = plt.subplots(1, 2, figsize=(10.8, 4.4))
-    labels = ["位置漂移", "航向漂移"]
-    values = [
-        localization["position_drift"],
-        localization["yaw_drift"],
+def draw_system_architecture():
+    fig, ax = plt.subplots(figsize=(10.2, 5.8))
+    ax.set_xlim(0, 10)
+    ax.set_ylim(0, 6)
+    ax.axis("off")
+    boxes = [
+        (0.4, 4.2, 2.1, 1.0, "Ignition Gazebo\nTurtleBot4 + warehouse", "#DBEAFE"),
+        (3.0, 4.2, 1.8, 1.0, "传感器\n/scan · /odom · TF", "#E0F2FE"),
+        (5.3, 4.2, 1.8, 1.0, "地图与定位\nSLAM / Map Server / AMCL", "#DCFCE7"),
+        (7.6, 4.2, 2.0, 1.0, "Nav2 任务层\nBT Navigator", "#FEF3C7"),
+        (7.6, 2.2, 2.0, 1.0, "Planner Server\n自定义 A* 插件", "#FDE68A"),
+        (5.3, 2.2, 1.8, 1.0, "Controller Server\nDWB", "#FCE7F3"),
+        (3.0, 2.2, 1.8, 1.0, "Velocity Smoother\n/cmd_vel_nav → /cmd_vel", "#EDE9FE"),
+        (0.4, 2.2, 2.1, 1.0, "Create 3 差速底盘\n闭环运动与避障", "#F3F4F6"),
+        (3.0, 0.3, 4.1, 0.9, "RViz + 自动验收脚本\n路径几何 · 定位 · 时钟 · action 终态", "#ECFDF5"),
     ]
-    thresholds = [
-        localization["maximum_position_drift"],
-        localization["maximum_yaw_drift"],
-    ]
-    axes[0].bar(labels, thresholds, color="#dbeafe", edgecolor="#2563eb", width=0.56)
-    axes[0].scatter(labels, values, color="#16a34a", s=90, zorder=5, label="实测值")
-    axes[0].set_ylim(0, 0.12)
-    axes[0].set_ylabel("m / rad")
-    axes[0].set_title("15 s 静止位姿稳定性")
-    axes[0].grid(axis="y", alpha=0.2)
-    axes[0].legend(frameon=False)
-    for index, threshold in enumerate(thresholds):
-        axes[0].text(index, threshold + 0.004, f"上限 {threshold:.2f}", ha="center", fontsize=9)
-        axes[0].text(index, 0.004, "实测 0.000", ha="center", fontsize=9, color="#166534")
+    for x, y, width, height, text, color in boxes:
+        patch = FancyBboxPatch(
+            (x, y),
+            width,
+            height,
+            boxstyle="round,pad=0.04,rounding_size=0.08",
+            facecolor=color,
+            edgecolor="#374151",
+            linewidth=1.0,
+        )
+        ax.add_patch(patch)
+        ax.text(x + width / 2, y + height / 2, text, ha="center", va="center", fontsize=9.4)
 
-    axes[1].axis("off")
-    lines = [
-        "LaserScan / 地图匹配率",
-        f"{localization['scan_alignment'] * 100:.1f}%（阈值 "
-        f"{localization['minimum_scan_alignment'] * 100:.0f}%）",
-        "",
-        "长距离导航",
-        f"{navigation['path_pose_count']} 个位姿 / {navigation['path_length']:.3f} m",
-        f"{navigation['wall_duration_seconds']:.1f} s / {navigation['terminal_status_label']}",
-        "",
-        "完整录屏",
-        f"{video['duration_seconds']:.3f} s，无加速、无删减",
+    arrows = [
+        ((2.5, 4.7), (3.0, 4.7)),
+        ((4.8, 4.7), (5.3, 4.7)),
+        ((7.1, 4.7), (7.6, 4.7)),
+        ((8.6, 4.2), (8.6, 3.2)),
+        ((7.6, 2.7), (7.1, 2.7)),
+        ((5.3, 2.7), (4.8, 2.7)),
+        ((3.0, 2.7), (2.5, 2.7)),
+        ((1.45, 3.2), (1.45, 4.2)),
+        ((5.05, 1.2), (5.05, 2.2)),
     ]
-    axes[1].text(
+    for start, end in arrows:
+        ax.annotate(
+            "",
+            xy=end,
+            xytext=start,
+            arrowprops={"arrowstyle": "->", "color": "#4B5563", "lw": 1.5},
+        )
+    ax.set_title("TurtleBot4 仿真自主导航系统架构", fontsize=15, weight="bold")
+    save_figure(fig, "system_architecture.png")
+
+
+def draw_missing_screenshot(name, title, detail):
+    path = FIGURES / name
+    if path.exists():
+        return
+    fig, ax = plt.subplots(figsize=(9.2, 5.2))
+    ax.axis("off")
+    ax.add_patch(
+        FancyBboxPatch(
+            (0.05, 0.12),
+            0.90,
+            0.76,
+            transform=ax.transAxes,
+            boxstyle="round,pad=0.02",
+            facecolor="#F9FAFB",
+            edgecolor="#9CA3AF",
+            linewidth=1.5,
+        )
+    )
+    ax.text(0.5, 0.62, title, ha="center", va="center", fontsize=17, weight="bold")
+    ax.text(0.5, 0.43, detail, ha="center", va="center", fontsize=11, color="#4B5563")
+    ax.text(
         0.5,
-        0.5,
-        "\n".join(lines),
+        0.27,
+        "原始 PNG 尚未随当前附件提供",
         ha="center",
         va="center",
-        fontsize=12,
-        linespacing=1.45,
-        bbox={
-            "boxstyle": "round,pad=0.8",
-            "facecolor": "#f8fafc",
-            "edgecolor": "#94a3b8",
-        },
+        fontsize=10,
+        color="#D55E00",
     )
-    fig.suptitle("定位、雷达与长距离导航验收结果", fontsize=15, fontweight="bold", y=1.02)
-    fig.tight_layout()
-    fig.savefig(FIGURES / "localization_acceptance.png", bbox_inches="tight")
-    plt.close(fig)
-
-
-def map_png():
-    image = Image.open(MAPS / "lab_map.pgm")
-    image.save(FIGURES / "lab_map.png")
-    extended = MAPS / "extended_lab_map.pgm"
-    if extended.exists():
-        Image.open(extended).save(FIGURES / "extended_lab_map.png")
+    save_figure(fig, name)
 
 
 def main():
-    FIGURES.mkdir(exist_ok=True)
-    configure_style()
-    architecture()
-    slam_metrics()
-    path_plot()
-    acceptance_improvements()
-    localization_acceptance()
-    map_png()
+    navigation, positions, deviations, clock_rates = load_evidence()
+    draw_system_architecture()
+    draw_route(navigation, positions, deviations)
+    draw_acceptance_metrics(navigation)
+    draw_clock_stability(clock_rates)
+    draw_runtime_summary(navigation)
+    draw_missing_screenshot(
+        "red_blue_start.png",
+        "红点起始状态截图",
+        "RViz 中机器人已定位于 (-11.25, -10.50)",
+    )
+    draw_missing_screenshot(
+        "red_blue_path.png",
+        "双货架 A* 路径截图",
+        "路径 24.489 m，绕行比 2.102，最大横向绕行 7.055 m",
+    )
+    draw_missing_screenshot(
+        "red_blue_success.png",
+        "蓝点终态截图",
+        "同一 NavigateToPose action 最终状态 SUCCEEDED (4)",
+    )
 
 
 if __name__ == "__main__":

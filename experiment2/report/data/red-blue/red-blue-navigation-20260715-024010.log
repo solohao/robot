@@ -1,0 +1,4 @@
+[INFO] [1784083212.162835551] [long_navigation_runner]: waiting for /navigate_to_pose
+[INFO] [1784083212.720732863] [long_navigation_runner]: goal accepted: x=0.400, y=-10.500
+[INFO] [1784083213.255679151] [long_navigation_runner]: path received: poses=787, length=24.489 m, detour_ratio=2.102, lateral_deviation=7.055 m, direct_obstacles=4
+[PASS] Long navigation: path_length=24.489 m, detour_ratio=2.102, lateral_deviation=7.055 m, direct_obstacles=4, wall_duration=1248.1 s, status=SUCCEEDED
