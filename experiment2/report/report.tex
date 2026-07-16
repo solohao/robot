@@ -97,8 +97,9 @@ Gazebo、RViz、SLAM Toolbox、AMCL 和 Nav2，完成从环境感知、地图表
   长距离绕行，并对路径几何、定位稳定性、仿真时钟、规划器加载状态、action
   终态和完整视频进行量化验收。
   \item \textbf{实地实验部分：}将同一 ROS 2 包、A* 插件和 Nav2 参数迁移到实体
-  TurtleBot4，完成现场地图、初始位姿、目标点、安全边界和运行数据采集。本部分
-  当前尚未实施，报告只提供可直接填写的实验模板，不虚构任何实测数据。
+  TurtleBot4，在 Ubuntu 22.04、ROS 2 Humble 和 Discovery Server 环境下完成地图
+  加载、AMCL 定位和窄通道自主导航。实机过程已录制连续视频并最终通过；现有记录
+  能证明故障处理和功能完成，但未保存可复算的路径、终点误差和重复成功率数据。
 \end{enumerate}
 
 \subsection*{1.2 实验要求}
@@ -111,7 +112,7 @@ Gazebo、RViz、SLAM Toolbox、AMCL 和 Nav2，完成从环境感知、地图表
   \item 设置明确起点和目标点，使机器人在仿真环境中自主绕障；
   \item 使用路径长度、绕行比、横向偏移和直线障碍段数证明路线具有足够难度；
   \item 保存原始路径、日志、JSON、时钟、定位、视频元数据和运行截图；
-  \item 为实地实验预留设备、网络、安全、路线、数据和异常记录模板。
+  \item 分析实机 lifecycle 激活超时和窄直角弯受阻问题，记录修复参数与验证步骤。
 \end{enumerate}
 
 \section*{二、实验内容和原理（必填）}
@@ -290,20 +291,79 @@ ros2 run tb4_experiment_bringup run_long_navigation \
 40.709 s 浓缩摘要，而使用 1336.604 s 的原速连续版本。关键时刻包括红点定位、
 路径生成、绕过第一组货架、绕过第二组货架和蓝点 \texttt{SUCCEEDED}。
 
-\subsection*{4.6 实地实验操作模板}
+\subsection*{4.6 实机实验操作与故障处理}
 
-实地实验尚未执行。后续应按以下顺序进行，并在每一步完成后填写表格：
+实机平台为 Ubuntu 22.04、ROS 2 Humble 和 TurtleBot4，导航地图由
+\texttt{map\_server} 读取，AMCL 负责 \texttt{map -> odom} 定位，Nav2 使用
+Discovery Server 完成节点发现。现有实验记录与连续视频表明最终路线已成功通过。
+实机操作过程如下：
 \begin{enumerate}[label=\arabic*)]
   \item 检查机器人电量、急停、轮胎、激光雷达和安全隔离区；
   \item 记录 TurtleBot4 与远程主机的网络、DDS domain 和时间同步配置；
   \item 在低速手动模式下验证 \texttt{/scan}、\texttt{/odom}、TF 和
   \texttt{/cmd\_vel}；
-  \item 建图并保存实地地图，记录地图分辨率和尺寸；
-  \item 在地图中标定实地起点、目标点、障碍物与安全距离；
-  \item 先以低速和短路线验证，再执行完整路线；
-  \item 同步保存 bag、路径、action、最终位姿、照片和连续视频；
+  \item 加载 \texttt{/home/lex/map/map.yaml}，检查
+  \texttt{/map}、LaserScan 和 \texttt{map -> odom -> base\_link}；
+  \item 在 RViz 设置 2D Pose Estimate，使红色激光与黑色地图贴合；
+  \item 先以低速和短路线验证，再执行泡沫垫、纸箱构成的窄通道直角弯路线；
+  \item 同步录制完整视频，并观察 action、恢复行为和人工接管情况；
   \item 出现定位跳变、动态障碍或通信中断时立即停止机器人。
 \end{enumerate}
+
+\subsubsection*{4.6.1 AMCL 与 map\_server 手动激活}
+
+在 ROS 2 Humble 与 Discovery Server 组合下，
+\texttt{lifecycle\_manager\_localization} 调用
+\texttt{/amcl/change\_state} 时出现超时，AMCL 停留在
+\texttt{inactive [2]}。此时即使在 RViz 发布初始位姿，日志仍提示 AMCL 尚未
+active，因而不会广播 \texttt{map -> odom}。实验绕过卡死的 manager，分别检查并
+手动激活 AMCL 与 map\_server：
+
+\begin{verbatim}
+sleep 5
+ros2 lifecycle get /amcl
+ros2 lifecycle get /map_server
+ros2 lifecycle set /amcl configure
+ros2 lifecycle set /amcl activate
+ros2 lifecycle set /map_server configure
+ros2 lifecycle set /map_server activate
+ros2 topic hz /map
+ros2 run tf2_ros tf2_echo map base_link
+\end{verbatim}
+
+\texttt{configure} 在节点已处于 inactive 时可能返回
+\texttt{Unknown transition}，该提示不影响随后执行 \texttt{activate}。激活后，
+RViz 能显示黑色地图和红色 LaserScan；两者贴合且 TF 连续更新后才发送 Nav2 Goal。
+
+\subsubsection*{4.6.2 窄直角弯膨胀层调参}
+
+初始参数中局部与全局 costmap 的 \texttt{inflation\_radius=0.45 m}，机器人半径
+约为 0.175 m，对应约 0.625 m 的单侧安全影响范围。现场窄弯内宽约 0.7 m，两侧
+膨胀代价叠加后使通道在规划与恢复行为中近似封闭，机器人在拐角附近停转、后退，
+\texttt{backup} 和 \texttt{spin} 均可能报告 \texttt{Collision Ahead}。
+
+实验将 local/global costmap 的膨胀层统一修改为：
+
+\begin{verbatim}
+inflation_layer:
+  cost_scaling_factor: 2.5
+  inflation_radius: 0.30
+\end{verbatim}
+
+修改后重新构建 \texttt{tb4\_experiment\_bringup}，并以实机 launch 加载地图：
+
+\begin{verbatim}
+cd ~/experiment2/ros2_ws
+colcon build --symlink-install \
+  --packages-select tb4_experiment_bringup
+source install/setup.bash
+ros2 launch tb4_experiment_bringup real_robot.launch.py \
+  map:=/home/lex/map/map.yaml
+\end{verbatim}
+
+连续视频记录表明调整后机器人最终通过该直角弯并完成实机导航。由于本次仅保留
+问题记录和视频，没有导出 rosbag、完整 \texttt{/plan}、最终 TF 或 action JSON，
+因此报告不虚构实机路径长度、终点误差和动作状态码。
 
 \section*{五、实验数据记录和处理}
 
@@ -326,6 +386,8 @@ ros2 run tb4_experiment_bringup run_long_navigation \
   \texttt{red-blue-clock-stability.log} & 世界加载后的四个 \texttt{/clock} 频率窗口\\
   \texttt{red-blue-video-ffprobe.json} & 完整视频编码、帧率和时长\\
   \texttt{test-report.md} & 完整断言、限制说明与关键截图索引\\
+  \texttt{data/real-robot/README.md} & 实机 lifecycle 超时、手动激活步骤、窄弯
+  costmap 调参与现有证据边界\\
   \bottomrule
 \end{longtable}
 
@@ -433,28 +495,29 @@ ros2 run tb4_experiment_bringup run_long_navigation \
   \caption{图 10：蓝点终态：同一 action 返回 SUCCEEDED (4)}
 \end{figure}
 
-\subsection*{5.6 实地实验数据表（待填写）}
+\subsection*{5.6 实机实验数据与证据状态}
 
 \begin{longtable}{p{4.3cm}p{4.4cm}p{4.4cm}}
   \toprule
   项目 & 实测值 & 备注\\
   \midrule
   \endhead
-  实验日期、地点 & \pending & \\
-  TurtleBot4 型号、序列号 & \pending & \\
-  ROS 2 / 固件版本 & \pending & \\
-  网络、DDS domain、主机 IP & \pending & \\
-  地图文件、分辨率、尺寸 & \pending & \\
+  实验日期、地点 & \pending & 现有记录未注明\\
+  TurtleBot4 型号、序列号 & TurtleBot4；序列号待补 & 实体机器人\\
+  ROS 2 / 操作系统 & ROS 2 Humble / Ubuntu 22.04 & \\
+  网络、DDS domain、主机 IP & Discovery Server；其余待补 & 出现 lifecycle 服务超时\\
+  地图文件、分辨率、尺寸 & \texttt{/home/lex/map/map.yaml}；其余待补 & \\
   实地起点 $(x,y,\theta)$ & \pending & \\
   实地目标 $(x,y,\theta)$ & \pending & \\
   路径位姿数、长度 & \pending & \\
   直线距离、绕行比 & \pending & \\
-  最小障碍距离 & \pending & \\
-  action 终态、耗时 & \pending & \\
+  costmap 膨胀参数 & radius 0.30 m；scaling 2.5 & local/global 一致\\
+  现场通道与障碍 & 约 0.7 m 窄直角弯、泡沫垫与纸箱 & \\
+  action 终态、耗时 & 视频显示路线通过；状态码与耗时待补 & \\
   最终位置误差、航向误差 & \pending & \\
   重复次数、成功次数 & \pending & \\
-  bag、照片、视频文件名 & \pending & \\
-  异常与人工接管记录 & \pending & \\
+  bag、照片、视频文件名 & 已录制连续视频；文件名待补 & 未提供 bag/路径数据\\
+  异常与人工接管记录 & lifecycle 超时、窄弯 Collision Ahead & 参数调整后通过\\
   \bottomrule
 \end{longtable}
 
@@ -495,28 +558,35 @@ ros2 run tb4_experiment_bringup run_long_navigation \
 准备、完整运动和终态确认。视频为 H.264、15 fps，并带有字幕流。40.709 s 的浓缩
 摘要没有被用于功能验收，从而避免通过加速或删减掩盖中途停滞、碰撞或人工接管。
 
-\subsection*{6.5 仿真结果的适用边界}
+\subsection*{6.5 仿真与实机结果的适用边界}
 
 \begin{enumerate}[label=\arabic*)]
   \item VMware 使用 server-only Gazebo、软件渲染、降低传感器频率和较低实时因子，
   运行时长不代表标准主机性能；
   \item 仿真地图、摩擦、激光噪声和底盘模型不能完整复现实体环境；
   \item 静止定位稳定不代表运动过程中的全局定位误差；
-  \item 路径几何验收证明了规划难度，但最小动态障碍距离仍应在实体实验中单独记录；
-  \item 当前实地实验没有数据，任何成功率、误差、耗时和安全结论均不得提前填写。
+  \item 路径几何验收证明了仿真规划难度，但实机最小障碍距离仍未量化；
+  \item 实机视频证明了最终功能通过，但不能替代 rosbag、路径、终点 TF、动作状态码
+  和重复试验统计，故报告只给出与现有证据强度相符的结论。
 \end{enumerate}
 
-\subsection*{6.6 实地实验分析模板}
+\subsection*{6.6 实机问题与结果分析}
 
-完成实地实验后，应至少从以下方面比较仿真与实测：
+实机实验揭示了仿真中不明显的两类系统问题：
 \begin{enumerate}[label=\arabic*)]
-  \item 地图尺度、障碍位置和膨胀半径是否一致；
-  \item AMCL 静止漂移、运动漂移和重定位时间；
-  \item A* 路径长度、拐点数量及与仿真路线的差异；
-  \item DWB 实际速度、急停次数、振荡和人工接管；
-  \item 最终位置与航向误差；
-  \item 多次重复实验的成功率和耗时分布；
-  \item 网络延迟、丢包、时间同步和传感器异常对结果的影响。
+  \item \textbf{生命周期与通信耦合：}节点已启动不等于导航链可用。在 Discovery
+  Server 环境中，manager 的 \texttt{change\_state} 服务超时会使 AMCL 或
+  map\_server 停留在 inactive；必须以 lifecycle 状态、\texttt{/map} 输出和 TF
+  连续性作为发送目标前的联合门槛。
+  \item \textbf{仿真参数不能直接照搬现场：}0.45 m 膨胀半径在宽阔仿真货架区具有
+  较高安全余量，但在约 0.7 m 的实体窄弯中会使通道不可行。调整到 0.30 m 后可通过，
+  说明安全距离与可通行性之间需要结合机器人半径和现场净宽折中。
+  \item \textbf{恢复行为不能修复几何不可行：}当 local/global costmap 都把弯道
+  封闭时，反复 backup 和 spin 只会触发 Collision Ahead。应先检查膨胀层与 footprint，
+  而不是仅增加恢复次数。
+  \item \textbf{证据完整性仍需提升：}最终视频可证明机器人连续通过路线，但无法
+  独立复算路径长度、定位误差、action 状态码和多次成功率。后续应同步保存 rosbag、
+  \texttt{/plan}、终态 TF 与 action result。
 \end{enumerate}
 
 \section*{七、讨论、心得}
@@ -531,9 +601,11 @@ pluginlib 生命周期接入 Nav2，使用实时 costmap，并与 AMCL、TF、�
 可以从原始数据重新计算，而不是依赖人工抄录。完整原速视频进一步补充了数据文件
 无法证明的连续运动和无人工接管过程。
 
-下一阶段的重点是实体 TurtleBot4 实验。应先以安全和数据完整性为目标，完成网络、
-急停、低速短路线和传感器检查，再执行正式路线。实地数据与仿真结果应并列呈现，
-对误差和失败进行解释，而不应只保留成功的一次运行。
+实体 TurtleBot4 实验进一步表明，完整导航不仅取决于 A*。lifecycle manager 的
+服务超时会切断定位链，膨胀半径与窄弯净宽不匹配会使规划和恢复共同失败。通过手动
+激活 AMCL/map\_server，并把 local/global inflation radius 从 0.45 m 调整为
+0.30 m，最终视频记录了机器人通过实体路线。后续仍应补齐 rosbag、终点误差、
+action 状态码和重复成功率，使实机证据达到与仿真部分相同的可复算程度。
 
 \section*{参考文献}
 
