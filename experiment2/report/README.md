@@ -2,10 +2,11 @@
 
 本目录生成《TurtleBot4 移动机器人自主导航与避障》完整实验报告：
 
-- `report.tex`：报告内容源，包含已完成的计算机仿真和待填写的实地实验模板；
+- `report.tex`：报告内容源，包含已完成的计算机仿真和实机问题、调参及视频结论；
 - `template/实验报告模板.docx`：用户提供的浙江大学实验报告模板；
 - `extract_template_assets.py`：通过 OpenXML 读取模板页面参数、字段标签和校名字；
-- `build_report_docx.py`：保留模板前两页团队信息结构，并将 Pandoc 正文合并为 Word；
+- `build_report_docx.py`：以原模板 DOCX 为主文档，直接保留前两页原始 OpenXML、
+  浮动对象、段落和宋体样式，再通过 `docxcompose` 拼接 Pandoc 正文；
 - `generate_figures.py`：从原始路径、JSON、时钟和视频数据独立复算并生成图表；
 - `data/red-blue/`：红点到蓝点运行的原始路径、日志和验收证据；
 - `figures/red_blue_*.png`：红蓝点路线图、指标图和五张原始运行截图。
@@ -24,8 +25,11 @@
 | action 终态 | `SUCCEEDED (4)` |
 | action 墙钟时长 | `1248.075 s` |
 
-实地实验尚未执行。报告中的实体设备、现场路线、误差、成功率、照片和视频字段均
-明确标记为“待实测填写”，没有使用仿真数据代替实测数据。
+实机实验已录制视频并最终通过。报告记录了 Discovery Server 环境下 AMCL 与
+map_server lifecycle 激活超时、手动激活流程，以及窄直角弯中将 local/global
+costmap 的 `inflation_radius` 从 `0.45 m` 调整为 `0.30 m`、`cost_scaling_factor`
+从 `4.0` 调整为 `2.5` 的处理。未提供的 rosbag、路径、终点误差、action 状态码和
+重复成功率仍明确标记为待补，不以视频推断不存在的定量数据。
 
 ## 生成
 
@@ -33,6 +37,7 @@ Ubuntu 22.04：
 
 ```bash
 sudo apt install pandoc libreoffice-writer poppler-utils python3-docx python3-lxml
+python3 -m pip install --user -r requirements-report.txt
 make docx
 make pdf
 ```
