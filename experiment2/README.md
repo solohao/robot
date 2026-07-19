@@ -266,7 +266,7 @@ ros2 launch tb4_experiment_bringup real_robot.launch.py slam:=true
 
 最终运行还通过了 120 秒 `/clock` 与有效 `/scan` 启动验证。完整实验条件、客观数据、
 新旧结果对比和限制说明见
-[`report/实验二-TurtleBot4自主导航仿真-实验报告.pdf`](report/实验二-TurtleBot4自主导航仿真-实验报告.pdf)。
+[`report/实验二-TurtleBot4自主导航与避障-完整实验报告.pdf`](report/实验二-TurtleBot4自主导航与避障-完整实验报告.pdf)。
 
 ## 重新生成报告
 

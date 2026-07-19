@@ -17,6 +17,17 @@ TEMPLATE = ROOT / "template" / "实验报告模板.docx"
 BODY_HEADING = "一、实验目的和要求（必填）"
 TEMPLATE_BODY_HEADING = "一、实验目的和要求"
 
+STUDENT_INFO = {
+    "course": "机器人与智能系统综合实践",
+    "names": "刘峻豪　莫移合　蓝恩先",
+    "department": "控制学院",
+    "major": "控制自动化",
+    "student_ids": "3230105220　3230102397　3230104940",
+    "instructors": "任沁源　姚近科",
+    "experiment_name": "TurtleBot4 移动机器人自主导航与避障",
+    "experiment_type": "综合性实验",
+}
+
 
 def element_text(element):
     text_tags = {qn("w:t"), qn("m:t")}
@@ -238,9 +249,56 @@ def configure_report_body(document):
     properties.keywords = "ROS 2, TurtleBot4, Nav2, A*, AMCL, SLAM"
 
 
+def set_paragraph_text(paragraph, text):
+    for run in list(paragraph.runs):
+        run._element.getparent().remove(run._element)
+    run = paragraph.add_run(text)
+    set_east_asia_font(run)
+
+
+def fill_front_matter(document):
+    label_values = {
+        "课程名称": STUDENT_INFO["course"],
+        "姓名": STUDENT_INFO["names"],
+        "院系": STUDENT_INFO["department"],
+        "专业": STUDENT_INFO["major"],
+        "学号": STUDENT_INFO["student_ids"],
+        "指导老师": STUDENT_INFO["instructors"],
+    }
+    for table in document.tables:
+        for row in table.rows:
+            if len(row.cells) < 2:
+                continue
+            label = "".join(row.cells[0].text.split()).replace("：", "").replace(":", "")
+            value = label_values.get(label)
+            if value is None:
+                continue
+            cell = row.cells[1]
+            set_paragraph_text(cell.paragraphs[0], value)
+            for extra in cell.paragraphs[1:]:
+                set_paragraph_text(extra, "")
+
+    course_line = (
+        f"课程名称：{STUDENT_INFO['course']}\t指导老师："
+        f"{STUDENT_INFO['instructors']}\t成绩："
+    )
+    experiment_line = (
+        f"实验名称：{STUDENT_INFO['experiment_name']}\t实验类型："
+        f"{STUDENT_INFO['experiment_type']}"
+    )
+    peers_line = f"同组学生姓名：{STUDENT_INFO['names']}"
+    for paragraph in document.paragraphs:
+        text = paragraph.text
+        if "课程名称" in text and "成绩" in text:
+            set_paragraph_text(paragraph, course_line)
+        elif "实验名称" in text and "同组学生姓名" in text:
+            set_paragraph_text(paragraph, f"{experiment_line}\t{peers_line}")
+
+
 def build(input_path, output_path):
     template_document = Document(TEMPLATE)
     trim_template_to_front_matter(template_document)
+    fill_front_matter(template_document)
 
     report_document = Document(input_path)
     trim_to_report_body(report_document)
