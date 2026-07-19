@@ -18,13 +18,15 @@ required_files=(
   "maps/lab_map.pgm"
   "maps/extended_lab_map.yaml"
   "maps/extended_lab_map.pgm"
+  "maps/real_robot_map.pgm"
   "report/report.tex"
-  "report/实验二-TurtleBot4自主导航仿真-实验报告.docx"
-  "report/实验二-TurtleBot4自主导航仿真-实验报告.pdf"
+  "report/实验二-TurtleBot4自主导航与避障-完整实验报告.docx"
+  "report/实验二-TurtleBot4自主导航与避障-完整实验报告.pdf"
   "report/data/acceptance-summary.json"
   "report/data/astar-plan.yaml"
   "video/实验二-SLAM增量建图.mp4"
   "video/实验二-自主导航.mp4"
+  "video/实验二-实地导航.mp4"
 )
 
 for path in "${required_files[@]}"; do

@@ -13,7 +13,7 @@ from docx.oxml.ns import qn
 from docx.shared import Cm, Pt, RGBColor
 
 
-REPORT = "实验二-TurtleBot4自主导航仿真-实验报告.docx"
+REPORT = "实验二-TurtleBot4自主导航与避障-完整实验报告.docx"
 
 FIGURE_CAPTIONS = [
     "TurtleBot4 仿真自主导航系统架构",
